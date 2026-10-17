@@ -290,9 +290,12 @@ export default function BankaiTodayCard({
               <span className="font-extrabold text-sm tracking-tight font-['Google_Sans',sans-serif]">
                 {t.bankaiToday}
               </span>
-              <span className="text-[10px] font-black uppercase px-1.5 py-0.2 rounded-[6px] bg-[#9B72CB]/20 text-[#9B72CB] border border-[#9B72CB]/30">
-                Bankai
-              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-[6px] bg-[#9B72CB]/20 text-[#9B72CB] border border-[#9B72CB]/30">
+  {new Date().toLocaleDateString(
+    currentLang === 'KN' ? 'kn-IN' : currentLang === 'HI' ? 'hi-IN' : 'en-GB',
+    { day: 'numeric', month: 'short', year: 'numeric' }
+  )}
+</span>
             </div>
             <div className="text-[11px] font-medium text-[#EA4335] flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#EA4335] animate-ping" />
