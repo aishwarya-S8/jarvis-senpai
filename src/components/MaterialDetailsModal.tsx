@@ -31,6 +31,7 @@ import {
   addBatchUsageLog,
   computeMaterialStatus,
 } from '../services/materialService';
+import { useLanguage } from '../context/LanguageContext';
 
 interface MaterialDetailsModalProps {
   material: MaterialItem | null;
@@ -47,6 +48,8 @@ export default function MaterialDetailsModal({
   isDark,
   onMaterialUpdated,
 }: MaterialDetailsModalProps) {
+  const { currentLang, t } = useLanguage();
+
   if (!isOpen || !material) return null;
 
   const [activeTab, setActiveTab] = useState<'history' | 'specs'>('history');
@@ -69,18 +72,18 @@ export default function MaterialDetailsModal({
   const batchNo = material.batchNo || 'UNKNOWN-BATCH';
   const dynamicStatus = computeMaterialStatus(material.expiryDate);
 
-  // Status Chip Colors
+  // Status Chip Colors & Localized Labels
   let chipClasses = 'bg-[#34A853]/15 text-[#34A853] border-[#34A853]/40';
-  let chipLabel = 'ok';
+  let chipLabel = t.statusOk;
   let chipDot = 'bg-[#34A853]';
 
   if (dynamicStatus === 'expiring') {
     chipClasses = 'bg-[#f29900]/15 text-[#f29900] border-[#f29900]/40';
-    chipLabel = 'expiring';
+    chipLabel = t.statusExpiring;
     chipDot = 'bg-[#f29900]';
   } else if (dynamicStatus === 'expired') {
     chipClasses = 'bg-[#EA4335]/15 text-[#EA4335] border-[#EA4335]/40';
-    chipLabel = 'expired';
+    chipLabel = t.statusExpired;
     chipDot = 'bg-[#EA4335]';
   }
 
@@ -167,7 +170,7 @@ export default function MaterialDetailsModal({
         newRemaining
       );
 
-      setLogSuccessNotice(`Logged ${Math.abs(delta)} ${material.unit || 'units'} (${usageAction}). New balance: ${newRemaining} ${material.unit || ''}`);
+      setLogSuccessNotice(t.usageRecordedSuccess);
       setIsLoggingUsage(false);
       setUsageQuantity(1);
 
@@ -213,7 +216,7 @@ export default function MaterialDetailsModal({
                 <span>{chipLabel}</span>
               </span>
               <span className={`text-[11px] truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {material.category || 'Inventory Item'}
+                {material.category || t.category}
               </span>
             </div>
 
@@ -228,7 +231,7 @@ export default function MaterialDetailsModal({
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
               isDark ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500'
             }`}
-            aria-label="Close modal"
+            aria-label={t.close}
           >
             <X className="w-5 h-5" />
           </button>
@@ -250,7 +253,9 @@ export default function MaterialDetailsModal({
             }`}
           >
             <History className="w-4 h-4" />
-            <span>Batch History ({usageLogs.length})</span>
+            <span>
+              {t.tabUsageHistory} ({usageLogs.length})
+            </span>
           </button>
 
           <button
@@ -263,7 +268,7 @@ export default function MaterialDetailsModal({
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>Item Details</span>
+            <span>{t.tabBatchEntries}</span>
           </button>
         </div>
 
@@ -286,7 +291,7 @@ export default function MaterialDetailsModal({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5 text-xs">
                 <Hash className="w-3.5 h-3.5 text-[#4285F4]" />
-                <span className="font-semibold text-slate-400">LOT / Batch:</span>
+                <span className="font-semibold text-slate-400">{t.batchNo}:</span>
                 <span className="font-mono font-bold">{batchNo}</span>
               </div>
 
@@ -297,28 +302,46 @@ export default function MaterialDetailsModal({
                 title="Copy batch number"
               >
                 {copiedBatch ? <Check className="w-3 h-3 text-[#34A853]" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedBatch ? 'Copied' : 'Copy'}</span>
+                <span>
+                  {copiedBatch
+                    ? currentLang === 'KN'
+                      ? 'ನಕಲಿಸಲಾಗಿದೆ'
+                      : currentLang === 'HI'
+                      ? 'कॉपी किया गया'
+                      : 'Copied'
+                    : currentLang === 'KN'
+                    ? 'ನಕಲಿಸಿ'
+                    : currentLang === 'HI'
+                    ? 'कॉपी करें'
+                    : 'Copy'}
+                </span>
               </button>
             </div>
 
             {/* Quick Metrics Grid */}
             <div className="grid grid-cols-3 gap-2 text-center pt-1">
               <div className={`p-2 rounded-[14px] border ${isDark ? 'bg-black/20 border-white/5' : 'bg-white border-slate-200'}`}>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Available</span>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                  {currentLang === 'KN' ? 'ಲಭ್ಯವಿದೆ' : currentLang === 'HI' ? 'उपलब्ध' : 'Available'}
+                </span>
                 <span className="text-sm font-extrabold text-[#4285F4] block mt-0.5">
                   {material.quantity !== null ? `${material.quantity} ${material.unit || ''}` : '—'}
                 </span>
               </div>
 
               <div className={`p-2 rounded-[14px] border ${isDark ? 'bg-black/20 border-white/5' : 'bg-white border-slate-200'}`}>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Total Used</span>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                  {currentLang === 'KN' ? 'ಬಳಸಲಾಗಿದೆ' : currentLang === 'HI' ? 'कुल प्रयुक्त' : 'Total Used'}
+                </span>
                 <span className="text-sm font-extrabold text-[#EA4335] block mt-0.5">
                   {totalQuantityDispensed > 0 ? `${totalQuantityDispensed} ${material.unit || ''}` : '0'}
                 </span>
               </div>
 
               <div className={`p-2 rounded-[14px] border ${isDark ? 'bg-black/20 border-white/5' : 'bg-white border-slate-200'}`}>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Expiry</span>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                  {currentLang === 'KN' ? 'ಮುಕ್ತಾಯ' : currentLang === 'HI' ? 'समाप्ति' : 'Expiry'}
+                </span>
                 <span className="text-xs font-bold block mt-1 truncate">
                   {material.expiryDate || '—'}
                 </span>
@@ -336,10 +359,10 @@ export default function MaterialDetailsModal({
                 <div>
                   <h3 className="text-xs font-extrabold uppercase tracking-wider font-['Google_Sans',sans-serif] flex items-center gap-1.5">
                     <Activity className="w-4 h-4 text-[#4285F4]" />
-                    <span>Batch Timeline & Provenance</span>
+                    <span>{t.timelineTitle}</span>
                   </h3>
                   <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Fetched live from Firestore for LOT {batchNo}
+                    LOT #{batchNo}
                   </p>
                 </div>
 
@@ -349,7 +372,7 @@ export default function MaterialDetailsModal({
                   className="px-3 py-1.5 rounded-[14px] ai-rainbow-gradient text-white text-xs font-bold flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>{isLoggingUsage ? 'Cancel' : 'Log Usage'}</span>
+                  <span>{isLoggingUsage ? t.cancelUsageBtn : t.logUsageBtn}</span>
                 </button>
               </div>
 
@@ -364,19 +387,19 @@ export default function MaterialDetailsModal({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#4285F4] flex items-center gap-1">
                       <TrendingDown className="w-3.5 h-3.5" />
-                      <span>Record Batch Usage / Dispensing</span>
+                      <span>{t.logUsageBtn}</span>
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">
-                      Stock: {material.quantity} {material.unit}
+                      {material.quantity} {material.unit}
                     </span>
                   </div>
 
                   {/* Action Selector */}
                   <div className="grid grid-cols-3 gap-1.5">
                     {[
-                      { id: 'dispensed', label: 'Dispense', icon: TrendingDown },
-                      { id: 'qc_inspection', label: 'QC Test', icon: ShieldCheck },
-                      { id: 'adjustment', label: 'Restock', icon: TrendingUp },
+                      { id: 'dispensed', label: t.actionDispensed.split(' ')[0], icon: TrendingDown },
+                      { id: 'qc_inspection', label: t.actionAudited.split(' ')[0], icon: ShieldCheck },
+                      { id: 'adjustment', label: t.quantity, icon: TrendingUp },
                     ].map((act) => (
                       <button
                         key={act.id}
@@ -391,7 +414,7 @@ export default function MaterialDetailsModal({
                         }`}
                       >
                         <act.icon className="w-3 h-3" />
-                        <span>{act.label}</span>
+                        <span className="truncate">{act.label}</span>
                       </button>
                     ))}
                   </div>
@@ -400,7 +423,7 @@ export default function MaterialDetailsModal({
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
                       <label className="text-[10px] font-semibold text-slate-400 block mb-1">
-                        Quantity ({material.unit || 'units'}):
+                        {t.dispenseQuantity} ({material.unit || 'units'}):
                       </label>
                       <input
                         type="number"
@@ -417,13 +440,13 @@ export default function MaterialDetailsModal({
 
                     <div className="flex-1">
                       <label className="text-[10px] font-semibold text-slate-400 block mb-1">
-                        Operator / Tech:
+                        {t.operatorLabel}:
                       </label>
                       <input
                         type="text"
                         value={usageOperator}
                         onChange={(e) => setUsageOperator(e.target.value)}
-                        placeholder="Operator name"
+                        placeholder={t.operatorPlaceholder}
                         className={`w-full h-9 px-3 rounded-[12px] text-xs outline-none border ${
                           isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'
                         }`}
@@ -434,13 +457,13 @@ export default function MaterialDetailsModal({
                   {/* Purpose / Notes */}
                   <div>
                     <label className="text-[10px] font-semibold text-slate-400 block mb-1">
-                      Purpose or Job Reference:
+                      {t.purposeLabel}:
                     </label>
                     <input
                       type="text"
                       value={usagePurpose}
                       onChange={(e) => setUsagePurpose(e.target.value)}
-                      placeholder="e.g. Batch run #4, Clinical formulation, Sample inspection"
+                      placeholder={t.purposePlaceholder}
                       className={`w-full h-9 px-3 rounded-[12px] text-xs outline-none border ${
                         isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'
                       }`}
@@ -457,7 +480,7 @@ export default function MaterialDetailsModal({
                     ) : (
                       <Check className="w-4 h-4" />
                     )}
-                    <span>Commit Usage to Firestore</span>
+                    <span>{isSubmittingLog ? t.recordingUsage : t.submitUsage}</span>
                   </button>
                 </form>
               )}
@@ -471,7 +494,9 @@ export default function MaterialDetailsModal({
                 >
                   <div className="font-bold text-[11px] text-[#4285F4] mb-1.5 flex items-center gap-1">
                     <Layers className="w-3.5 h-3.5" />
-                    <span>Related Firestore Records ({batchEntries.length} with LOT #{batchNo})</span>
+                    <span>
+                      {t.lotReceiptTitle} ({batchEntries.length})
+                    </span>
                   </div>
                   <div className="space-y-1">
                     {batchEntries.map((ent) => (
@@ -480,7 +505,7 @@ export default function MaterialDetailsModal({
                         className="flex items-center justify-between py-1 border-b border-white/5 last:border-0 text-[11px]"
                       >
                         <span className="truncate max-w-[170px] font-medium">{ent.name}</span>
-                        <span className="font-mono text-slate-400">{ent.purchaseDate || 'No date'}</span>
+                        <span className="font-mono text-slate-400">{ent.purchaseDate || '—'}</span>
                         <span className="font-bold text-[#4285F4]">{ent.quantity} {ent.unit}</span>
                       </div>
                     ))}
@@ -492,7 +517,7 @@ export default function MaterialDetailsModal({
               {isLoadingHistory ? (
                 <div className="text-center py-8 space-y-2">
                   <RefreshCw className="w-6 h-6 animate-spin text-[#4285F4] mx-auto" />
-                  <p className="text-xs text-slate-400">Loading batch records from Firestore...</p>
+                  <p className="text-xs text-slate-400">{t.loadingInventory}</p>
                 </div>
               ) : usageLogs.length === 0 ? (
                 <div
@@ -501,16 +526,16 @@ export default function MaterialDetailsModal({
                   }`}
                 >
                   <History className="w-8 h-8 text-slate-400 mx-auto mb-2 opacity-50" />
-                  <div className="text-xs font-bold mb-1">No usage logs recorded for this LOT</div>
+                  <div className="text-xs font-bold mb-1">{t.noUsageLogs}</div>
                   <p className="text-[11px] max-w-[240px] mx-auto text-slate-400 mb-3">
-                    Start tracking consumption and dispensing events by tapping "Log Usage" above.
+                    {t.noUsageLogsSubtitle}
                   </p>
                   <button
                     type="button"
                     onClick={() => setIsLoggingUsage(true)}
                     className="px-4 py-2 rounded-[14px] ai-rainbow-gradient text-white text-xs font-bold shadow-md cursor-pointer"
                   >
-                    Record First Usage
+                    {t.logUsageBtn}
                   </button>
                 </div>
               ) : (
@@ -572,7 +597,7 @@ export default function MaterialDetailsModal({
                           <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-white/5">
                             <span className="flex items-center gap-1">
                               <User className="w-3 h-3 text-slate-400" />
-                              <span>{log.operator || 'Operator'}</span>
+                              <span>{log.operator || t.operatorLabel}</span>
                             </span>
 
                             <span className="flex items-center gap-1 font-mono">
@@ -600,50 +625,45 @@ export default function MaterialDetailsModal({
                 }`}
               >
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Material Name:</span>
+                  <span className="text-slate-400">{t.materialName}:</span>
                   <span className="font-bold">{material.name}</span>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Category:</span>
+                  <span className="text-slate-400">{t.category}:</span>
                   <span className="font-semibold">{material.category || 'Standard'}</span>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Batch / LOT Number:</span>
+                  <span className="text-slate-400">{t.batchNo}:</span>
                   <span className="font-mono font-bold text-[#4285F4]">{batchNo}</span>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Current Stock:</span>
+                  <span className="text-slate-400">{t.quantity}:</span>
                   <span className="font-bold">{material.quantity} {material.unit}</span>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Purchase / Mfr Date:</span>
-                  <span className="font-medium">{material.purchaseDate || 'Not specified'}</span>
+                  <span className="text-slate-400">{t.purchaseDate}:</span>
+                  <span className="font-medium">{material.purchaseDate || '—'}</span>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Shelf Life Period:</span>
-                  <span className="font-medium">{material.shelfLifeDays || 90} days</span>
+                  <span className="text-slate-400">{t.estimatedShelfLife}:</span>
+                  <span className="font-medium">{material.shelfLifeDays || 90} {t.days}</span>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Calculated Expiry Date:</span>
-                  <span className="font-bold text-[#EA4335]">{material.expiryDate || 'N/A'}</span>
+                  <span className="text-slate-400">{t.calculatedExpiryDate}:</span>
+                  <span className="font-bold text-[#EA4335]">{material.expiryDate || '—'}</span>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">Gemini Extraction Confidence:</span>
+                  <span className="text-slate-400">{t.confidence}:</span>
                   <span className="font-bold text-[#34A853]">
-                    {Math.round((material.confidence ?? 0.95) * 100)}% Verified
+                    {Math.round((material.confidence ?? 0.95) * 100)}%
                   </span>
-                </div>
-
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-slate-400">Firestore Document ID:</span>
-                  <span className="font-mono text-[10px] text-slate-400">{material.id || 'Pending'}</span>
                 </div>
               </div>
             </div>
@@ -669,7 +689,7 @@ export default function MaterialDetailsModal({
                 : 'bg-white text-slate-800 hover:bg-slate-200 border-slate-300'
             }`}
           >
-            Close
+            {t.close}
           </button>
         </div>
       </div>

@@ -2,7 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
 
@@ -50,7 +50,7 @@ Language Support & Script Rules:
 - Otherwise provide a sharp, supportive, and natural answer in English.
 - Always invoke the corresponding tool function (scanItem, predictAlerts, findSuppliers, draftOrder) if appropriate to fulfill their intent.`;
 
-export const senpaiFunctionDeclarations: FunctionDeclaration[] = [
+export const senpaiFunctionDeclarations: any[] = [
   {
     name: 'scanItem',
     description: 'Prepare the camera scanner or look up details for a material or label.',

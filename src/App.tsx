@@ -44,6 +44,7 @@ import SenpaiScreen from './components/SenpaiScreen';
 import BankaiTodayCard from './components/BankaiTodayCard';
 import MaterialDetailsModal from './components/MaterialDetailsModal';
 import { AppLanguage, SUPPORTED_LANGUAGES, speakText } from './services/speechService';
+import { useLanguage } from './context/LanguageContext';
 import { Mic, Flame, History } from 'lucide-react';
 
 // Re-export for external consumer/tests
@@ -139,12 +140,13 @@ interface CapturedPhotoData {
 }
 
 export default function App() {
+  const { currentLang, setLanguage, t } = useLanguage();
+
   // Theme state: defaults to dark (looks more premium)
   const [theme, setTheme] = useState<ThemeMode>('dark');
 
   // Navigation tabs: 'scan', 'inventory', or 'senpai'
   const [activeTab, setActiveTab] = useState<ActiveTab>('scan');
-  const [currentLang, setCurrentLang] = useState<AppLanguage>('EN');
   const [senpaiInitialPrompt, setSenpaiInitialPrompt] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
 
@@ -488,25 +490,25 @@ export default function App() {
             <div>
               <div className="flex items-center gap-1.5">
                 <h1 className="text-lg font-bold tracking-tight font-['Google_Sans',sans-serif]">
-                  Jarvis Senpai
+                  {t.appName}
                 </h1>
                 <span className="text-[10px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-[6px] ai-rainbow-gradient text-white shadow-sm">
-                  2026
+                  {t.appYear}
                 </span>
               </div>
               <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {activeTab === 'scan'
-                  ? 'Multimodal Material Vision'
+                  ? t.headerScanSubtitle
                   : activeTab === 'inventory'
-                  ? 'Cloud Firestore Inventory'
-                  : 'Voice Agent & Registered Tools'}
+                  ? t.headerInventorySubtitle
+                  : t.headerSenpaiSubtitle}
               </p>
             </div>
           </div>
 
           {/* Right Header Actions: Language Chips + Theme Toggle */}
           <div className="flex items-center gap-2">
-            {/* Small Language Chips: EN / HI / KN */}
+            {/* Unified Small Language Chips: EN / HI / KN */}
             <div className={`flex items-center rounded-full p-0.5 border ${isDark ? 'bg-black/30 border-white/10' : 'bg-slate-100 border-slate-200'}`}>
               {(['EN', 'HI', 'KN'] as AppLanguage[]).map((lang) => {
                 const isSelected = currentLang === lang;
@@ -514,10 +516,7 @@ export default function App() {
                   <button
                     key={lang}
                     type="button"
-                    onClick={() => {
-                      setCurrentLang(lang);
-                      speakText(`Language switched to ${lang}`, lang);
-                    }}
+                    onClick={() => setLanguage(lang)}
                     className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
                       isSelected
                         ? 'ai-rainbow-gradient text-white shadow-sm'
@@ -542,7 +541,7 @@ export default function App() {
                   ? 'bg-white/[0.06] border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.12]'
                   : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
               }`}
-              title={isDark ? 'Switch to Light aurora' : 'Switch to Dark aurora'}
+              title={isDark ? t.switchThemeLight : t.switchThemeDark}
               aria-label="Toggle Theme"
             >
               {isDark ? <Sun className="w-4 h-4 text-[#FBBC04]" /> : <Moon className="w-4 h-4 text-[#4285F4]" />}
@@ -559,26 +558,26 @@ export default function App() {
             {isCameraActive && (
               <div className="flex-1 flex flex-col justify-between h-full overflow-y-auto">
                 {/* BANKAI — TODAY CARD (Open alerts & pending tasks briefing) */}
-                <BankaiTodayCard
-                  isDark={isDark}
-                  materials={materials}
-                  currentLang={currentLang}
-                  onLanguageChange={setCurrentLang}
-                  onNavigateToInventory={(filter) => {
-                    setActiveTab('inventory');
-                    if (filter) setStatusFilter(filter);
-                  }}
-                  onNavigateToScan={(item) => {
-                    setActiveTab('scan');
-                    setIsCameraActive(true);
-                    setIsCardFlipped(false);
-                    if (item) triggerNotice(`Targeting material: ${item}`);
-                  }}
-                  onNavigateToSenpai={(prompt) => {
-                    setActiveTab('senpai');
-                    if (prompt) setSenpaiInitialPrompt(prompt);
-                  }}
-                />
+                <div className="w-full flex-shrink-0">
+                  <BankaiTodayCard
+                    isDark={isDark}
+                    materials={materials}
+                    onNavigateToInventory={(filter) => {
+                      setActiveTab('inventory');
+                      if (filter) setStatusFilter(filter);
+                    }}
+                    onNavigateToScan={(item) => {
+                      setActiveTab('scan');
+                      setIsCameraActive(true);
+                      setIsCardFlipped(false);
+                      if (item) triggerNotice(`${t.toastTargeting} ${item}`);
+                    }}
+                    onNavigateToSenpai={(prompt) => {
+                      setActiveTab('senpai');
+                      if (prompt) setSenpaiInitialPrompt(prompt);
+                    }}
+                  />
+                </div>
 
                 {/* Mode Selector Chips: Frosted Glass */}
                 <div
@@ -588,9 +587,9 @@ export default function App() {
                 >
                   {(
                     [
-                      { id: 'document', label: 'Material Label', icon: Tag },
-                      { id: 'photo', label: 'Product Box', icon: Camera },
-                      { id: 'id_card', label: 'LOT / Batch Tag', icon: Hash },
+                      { id: 'document', label: t.modeMaterialLabel, icon: Tag },
+                      { id: 'photo', label: t.modeProductBox, icon: Camera },
+                      { id: 'id_card', label: t.modeBatchTag, icon: Hash },
                     ] as const
                   ).map((mode) => {
                     const isSelected = selectedMode === mode.id;
@@ -654,7 +653,7 @@ export default function App() {
                     <div className="w-full flex items-center justify-between z-10">
                       <span className="text-[11px] font-semibold tracking-wide uppercase px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white/90 border border-white/15 flex items-center gap-1.5 shadow-lg">
                         <span className="w-2 h-2 rounded-full bg-[#34A853] animate-pulse"></span>
-                        Gemini Lens Active
+                        {currentLang === 'KN' ? 'ಜೆಮಿನಿ ಲೆನ್ಸ್ ಸಕ್ರಿಯವಾಗಿದೆ' : currentLang === 'HI' ? 'जेमिनी लेंस सक्रिय' : 'Gemini Lens Active'}
                       </span>
 
                       <button
@@ -664,6 +663,7 @@ export default function App() {
                           setShowGrid(!showGrid);
                         }}
                         className="p-1.5 rounded-full bg-black/40 text-white/80 hover:text-white border border-white/10"
+                        title={t.grid}
                       >
                         <Grid className="w-3.5 h-3.5" />
                       </button>
@@ -677,17 +677,17 @@ export default function App() {
                         </div>
                       </div>
                       <p className="text-sm font-bold text-white drop-shadow">
-                        Tap anywhere to capture
+                        {t.tapToCapture}
                       </p>
                       <p className="text-xs text-slate-300 mt-1 max-w-[220px]">
-                        Flips seamlessly in 3D into the extracted material card
+                        {t.alignWithinFrame}
                       </p>
                     </div>
 
                     {/* Bottom pill in lens */}
                     <div className="z-10 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 text-[11px] font-medium text-white/90 flex items-center gap-2 shadow-lg">
                       <Sparkles className="w-3.5 h-3.5 text-[#FBBC04]" />
-                      <span>3D Card Flip on Use</span>
+                      <span>{t.flipToDetails}</span>
                     </div>
                   </div>
                 </div>
@@ -696,9 +696,9 @@ export default function App() {
                 <div className="px-4 py-2">
                   <div className="flex items-center justify-between text-[11px] font-medium mb-1.5">
                     <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>
-                      Quick sample presets:
+                      {t.samplePhotosTitle}:
                     </span>
-                    <span className="text-[#4285F4] font-semibold">Tap to test 3D flip</span>
+                    <span className="text-[#4285F4] font-semibold">{t.dragDropPrompt}</span>
                   </div>
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                     {SAMPLE_PHOTOS.map((sample, idx) => (
@@ -748,10 +748,10 @@ export default function App() {
                         ? 'bg-white/[0.05] border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.1]'
                         : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                     }`}
-                    title="Upload photo"
+                    title={t.uploadImage}
                   >
                     <ImageIcon className="w-5 h-5" />
-                    <span className="text-[9px] font-semibold mt-0.5">Gallery</span>
+                    <span className="text-[9px] font-semibold mt-0.5">{t.uploadImage}</span>
                   </button>
 
                   {/* Primary Circular Capture Button with Rainbow Glow */}
@@ -760,14 +760,14 @@ export default function App() {
                       type="button"
                       onClick={handleOpenDeviceCamera}
                       className="group relative min-w-[78px] min-h-[78px] w-[78px] h-[78px] rounded-full p-[2.5px] ai-rainbow-gradient flex items-center justify-center transition-all transform active:scale-90 shadow-[0_0_28px_rgba(66,133,244,0.45)] cursor-pointer"
-                      title="Capture Photo"
+                      title={t.scanTab}
                     >
                       <span className="relative w-full h-full rounded-full bg-[#0b0d12] flex items-center justify-center text-white transition-all group-hover:bg-[#161a24]">
                         <Camera className="w-7 h-7 text-white drop-shadow" />
                       </span>
                     </button>
                     <span className="text-[11px] font-bold text-[#4285F4] mt-1 font-['Google_Sans',sans-serif]">
-                      Capture
+                      {t.scanTab}
                     </span>
                   </div>
 
@@ -779,10 +779,10 @@ export default function App() {
                         ? 'bg-white/[0.05] border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.1]'
                         : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                     }`}
-                    title="View Inventory"
+                    title={t.inventoryTab}
                   >
                     <Package className="w-5 h-5" />
-                    <span className="text-[9px] font-semibold mt-0.5">Inventory</span>
+                    <span className="text-[9px] font-semibold mt-0.5">{t.inventoryTab}</span>
                     {materials.length > 0 && (
                       <span className="absolute -top-1 -right-1 ai-rainbow-gradient text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md">
                         {materials.length}
@@ -1279,12 +1279,10 @@ export default function App() {
                     </div>
                   </div>
                   <h3 className="text-base font-bold mb-1 font-['Google_Sans',sans-serif]">
-                    {searchQuery ? 'No materials match search' : 'No materials in inventory yet'}
+                    {searchQuery ? t.emptySearchTitle : t.emptyInventoryTitle}
                   </h3>
                   <p className={`text-xs mb-4 max-w-[260px] mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {searchQuery
-                      ? 'Try adjusting your search query or filter tags.'
-                      : 'Scan a material or product label to automatically extract and save with Gemini.'}
+                    {searchQuery ? t.emptySearchSubtitle : t.emptyInventorySubtitle}
                   </p>
 
                   <div className="flex flex-col gap-2 max-w-[240px] mx-auto">
@@ -1298,7 +1296,7 @@ export default function App() {
                       className="h-12 w-full rounded-[20px] ai-rainbow-gradient text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                     >
                       <Camera className="w-4 h-4" />
-                      <span>Scan First Material</span>
+                      <span>{t.scanTab}</span>
                     </button>
 
                     {!searchQuery && (
@@ -1308,7 +1306,7 @@ export default function App() {
                           SAMPLE_PHOTOS.filter((s) => s.mock.name !== 'No label detected').forEach((s) => {
                             saveMaterialToFirestore(s.mock, s.shelfLifeDays);
                           });
-                          triggerNotice('Added sample materials to Firestore!');
+                          triggerNotice(t.toastSaved);
                         }}
                         className={`h-10 w-full rounded-[20px] text-xs font-medium border cursor-pointer ${
                           isDark
@@ -1316,7 +1314,7 @@ export default function App() {
                             : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                         }`}
                       >
-                        Seed Demo Materials
+                        {currentLang === 'KN' ? 'ಡೆಮೊ ವಸ್ತುಗಳನ್ನು ಸೇರಿಸಿ' : currentLang === 'HI' ? 'डेमो सामग्री जोड़ें' : 'Seed Demo Materials'}
                       </button>
                     )}
                   </div>
@@ -1329,16 +1327,16 @@ export default function App() {
                   const dynamicStatus = computeMaterialStatus(item.expiryDate);
 
                   let chipClasses = 'bg-[#34A853]/15 text-[#34A853] border-[#34A853]/40';
-                  let chipLabel = 'ok';
+                  let chipLabel = t.statusOk;
                   let chipDot = 'bg-[#34A853]';
 
                   if (dynamicStatus === 'expiring') {
                     chipClasses = 'bg-[#f29900]/15 text-[#f29900] border-[#f29900]/40';
-                    chipLabel = 'expiring';
+                    chipLabel = t.statusExpiring;
                     chipDot = 'bg-[#f29900]';
                   } else if (dynamicStatus === 'expired') {
                     chipClasses = 'bg-[#EA4335]/15 text-[#EA4335] border-[#EA4335]/40';
-                    chipLabel = 'expired';
+                    chipLabel = t.statusExpired;
                     chipDot = 'bg-[#EA4335]';
                   }
 
@@ -1360,7 +1358,7 @@ export default function App() {
                           </h3>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className={`text-[11px] truncate max-w-[160px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                              {item.category || 'Material'}
+                              {item.category || t.category}
                             </span>
                           </div>
                         </div>
@@ -1381,7 +1379,7 @@ export default function App() {
                             isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-50 border-slate-100'
                           }`}
                         >
-                          <span className="text-[10px] text-slate-400 block font-medium">Batch / LOT #:</span>
+                          <span className="text-[10px] text-slate-400 block font-medium">{t.batchNo}:</span>
                           <span className="font-bold truncate block mt-0.5 font-mono text-[#4285F4]">
                             {item.batchNo ? item.batchNo : '—'}
                           </span>
@@ -1392,7 +1390,7 @@ export default function App() {
                             isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-50 border-slate-100'
                           }`}
                         >
-                          <span className="text-[10px] text-slate-400 block font-medium">Quantity:</span>
+                          <span className="text-[10px] text-slate-400 block font-medium">{t.quantity}:</span>
                           <span className="font-extrabold text-[#34A853] block mt-0.5">
                             {item.quantity !== null ? `${item.quantity} ${item.unit || ''}`.trim() : '—'}
                           </span>
@@ -1415,7 +1413,7 @@ export default function App() {
                           className="h-7 px-2.5 rounded-[10px] bg-[#4285F4]/15 hover:bg-[#4285F4]/25 text-[#4285F4] text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-[#4285F4]/30"
                         >
                           <History className="w-3 h-3" />
-                          <span>Batch History</span>
+                          <span>{t.viewBatchHistory}</span>
                         </button>
 
                         {item.id && (
@@ -1427,7 +1425,7 @@ export default function App() {
                             }}
                             disabled={deletingId === item.id}
                             className="p-1 rounded-full text-slate-400 hover:text-[#EA4335] hover:bg-[#EA4335]/10 transition-colors cursor-pointer"
-                            title="Delete Material"
+                            title={t.deleteItem}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1445,7 +1443,13 @@ export default function App() {
               }`}
             >
               <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                Showing <span className="font-bold">{filteredMaterials.length}</span> of {materials.length} items
+                {currentLang === 'KN' ? (
+                  <>ಒಟ್ಟು {materials.length} ರಲ್ಲಿ <span className="font-bold">{filteredMaterials.length}</span> ಸಾಮಗ್ರಿಗಳು</>
+                ) : currentLang === 'HI' ? (
+                  <>{materials.length} में से <span className="font-bold">{filteredMaterials.length}</span> सामग्री प्रदर्शित</>
+                ) : (
+                  <>Showing <span className="font-bold">{filteredMaterials.length}</span> of {materials.length} items</>
+                )}
               </div>
 
               <button
@@ -1458,7 +1462,7 @@ export default function App() {
                 className="min-h-[56px] h-14 px-5 rounded-[20px] ai-rainbow-gradient text-white font-['Google_Sans',sans-serif] font-bold text-xs flex items-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer"
               >
                 <Camera className="w-4 h-4" />
-                <span>Scan Another</span>
+                <span>{currentLang === 'KN' ? 'ಇನ್ನೊಂದನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ' : currentLang === 'HI' ? 'अन्य स्कैन करें' : 'Scan Another'}</span>
               </button>
             </div>
           </div>
@@ -1471,8 +1475,6 @@ export default function App() {
           <SenpaiScreen
             isDark={isDark}
             materials={materials}
-            currentLang={currentLang}
-            onLanguageChange={setCurrentLang}
             initialPrompt={senpaiInitialPrompt}
             onNavigateToScan={(presetItem) => {
               setActiveTab('scan');
@@ -1509,7 +1511,7 @@ export default function App() {
             >
               <Camera className="w-5 h-5" />
             </div>
-            <span className="text-[11px] font-bold mt-0.5">Scan</span>
+            <span className="text-[11px] font-bold mt-0.5">{t.scanTab}</span>
           </button>
 
           <button
@@ -1531,7 +1533,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <span className="text-[11px] font-bold mt-0.5">Inventory</span>
+            <span className="text-[11px] font-bold mt-0.5">{t.inventoryTab}</span>
           </button>
 
           <button
@@ -1554,7 +1556,7 @@ export default function App() {
                 AI
               </span>
             </div>
-            <span className="text-[11px] font-bold mt-0.5">Senpai</span>
+            <span className="text-[11px] font-bold mt-0.5">{t.senpaiTab}</span>
           </button>
         </nav>
 

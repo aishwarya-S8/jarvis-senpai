@@ -35,13 +35,11 @@ import {
   stopSpeech,
   SUPPORTED_LANGUAGES,
 } from '../services/speechService';
-import { getTranslations } from '../services/i18n';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SenpaiScreenProps {
   isDark: boolean;
   materials: MaterialItem[];
-  currentLang: AppLanguage;
-  onLanguageChange: (lang: AppLanguage) => void;
   initialPrompt?: string | null;
   onNavigateToScan: (presetItemName?: string) => void;
   onNavigateToInventory: (filter?: 'all' | 'ok' | 'expiring' | 'expired') => void;
@@ -52,13 +50,11 @@ type SenpaiPhase = 'idle' | 'listening' | 'thinking' | 'searching' | 'revealed';
 export default function SenpaiScreen({
   isDark,
   materials,
-  currentLang,
-  onLanguageChange,
   initialPrompt,
   onNavigateToScan,
   onNavigateToInventory,
 }: SenpaiScreenProps) {
-  const t = getTranslations(currentLang);
+  const { currentLang, setLanguage, t } = useLanguage();
 
   // Check SpeechRecognition browser API support
   const SpeechRecognitionAPI =
@@ -102,12 +98,10 @@ export default function SenpaiScreen({
     },
   ]);
 
-  // Audio stream & SpeechRecognition refs
+  // Audio & SpeechRecognition refs
   const recognitionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
 
   // General controls
   const [autoSpeakAnswers, setAutoSpeakAnswers] = useState<boolean>(true);
@@ -119,7 +113,7 @@ export default function SenpaiScreen({
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
-  // Map AppLanguage to SpeechRecognition locale
+  // Map AppLanguage to SpeechRecognition locale (en-US / hi-IN / kn-IN)
   const getLocaleForLang = (lang: AppLanguage): string => {
     switch (lang) {
       case 'HI':
@@ -146,21 +140,13 @@ export default function SenpaiScreen({
     }
   }, [initialPrompt]);
 
-  // Clean up recognition, audio context, and speech synthesis on unmount
-  useEffect(() => {
-    return () => {
-      stopSpeech();
-      stopListening();
-    };
-  }, []);
-
   /**
-   * Stop listening and release media stream / audio context
+   * Stop listening and abort recognition
    */
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.stop();
+        recognitionRef.current.abort();
       } catch (e) {
         // Ignore
       }
@@ -172,25 +158,48 @@ export default function SenpaiScreen({
       animFrameRef.current = null;
     }
 
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-
     setAudioAmplitude(0);
   }, []);
 
+  // Clean up recognition and speech synthesis on unmount
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+      stopListening();
+    };
+  }, [stopListening]);
+
+  // Fluid orb undulating amplitude effect while in 'listening' phase
+  useEffect(() => {
+    if (phase === 'listening') {
+      let animId: number;
+      const startTime = performance.now();
+      const tick = (now: number) => {
+        const elapsed = (now - startTime) / 1000;
+        // Multi-frequency harmonic wave simulating speech energy
+        const wave = 0.45 + 0.35 * Math.sin(elapsed * 7.5) * Math.cos(elapsed * 3.1);
+        setAudioAmplitude(Math.max(0.15, Math.min(0.95, wave)));
+        animId = requestAnimationFrame(tick);
+      };
+      animId = requestAnimationFrame(tick);
+      return () => {
+        cancelAnimationFrame(animId);
+      };
+    } else {
+      setAudioAmplitude(0);
+    }
+  }, [phase]);
+
   /**
    * Start listening:
-   * 1. Launches browser SpeechRecognition in selected language
-   * 2. Opens user media mic stream solely to calculate real-time amplitude for orb ripple
+   * On mic tap, creates fresh SpeechRecognition instance, sets recognition.lang
+   * to selected language (en-US / hi-IN / kn-IN), interimResults=false, continuous=false,
+   * then calls recognition.start().
+   * In onresult, reads event.results[0][0].transcript and sends text to Gemini.
+   * In onerror, shows real error on screen (no-speech, not-allowed, network, aborted)
+   * and auto-focuses the text query box.
    */
-  const startListening = async () => {
+  const startListening = () => {
     setErrorMessage(null);
     stopSpeech();
     setCurrentlySpeakingId(null);
@@ -202,100 +211,94 @@ export default function SenpaiScreen({
       setErrorMessage(
         'Browser SpeechRecognition is not supported on this browser. Please type your query in the text box below or click a quick prompt.'
       );
+      setTimeout(() => {
+        queryInputRef.current?.focus();
+      }, 150);
       return;
     }
 
-    try {
-      // 1. AudioContext setup for orb amplitude morphing
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaStreamRef.current = stream;
-
-          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-          if (AudioCtx) {
-            const ctx = new AudioCtx();
-            audioContextRef.current = ctx;
-            const source = ctx.createMediaStreamSource(stream);
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 64;
-            analyser.smoothingTimeConstant = 0.8;
-            source.connect(analyser);
-            analyserRef.current = analyser;
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            const updateAmp = () => {
-              if (analyserRef.current) {
-                analyserRef.current.getByteFrequencyData(dataArray);
-                let sum = 0;
-                for (let i = 0; i < dataArray.length; i++) {
-                  sum += dataArray[i];
-                }
-                const avg = sum / dataArray.length;
-                const normalized = Math.min(1.0, avg / 128);
-                setAudioAmplitude(normalized);
-                animFrameRef.current = requestAnimationFrame(updateAmp);
-              }
-            };
-            animFrameRef.current = requestAnimationFrame(updateAmp);
-          }
-        } catch (micErr) {
-          console.warn('Microphone stream for amplitude visualization unavailable:', micErr);
-        }
+    // Stop any existing instance cleanly
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {
+        // Ignore
       }
+      recognitionRef.current = null;
+    }
 
-      // 2. Initialize SpeechRecognition
+    try {
+      // 1. Create a fresh SpeechRecognition instance on mic tap
       const recognition = new SpeechRecognitionAPI();
       recognitionRef.current = recognition;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = getLocaleForLang(currentLang);
 
+      // 2. Set language, interimResults=false, continuous=false
+      recognition.lang = getLocaleForLang(currentLang);
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 1;
+
+      // 3. Set listening state while active
       recognition.onstart = () => {
         setPhase('listening');
         setStatusMessage('Listening…');
       };
 
+      // 4. In onresult, read event.results[0][0].transcript and send text to Gemini
       recognition.onresult = (event: any) => {
-        let interim = '';
-        let final = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-
-        if (interim) setInterimTranscript(interim);
-        if (final) {
-          setFinalTranscript(final);
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript && transcript.trim()) {
+          const spokenText = transcript.trim();
+          setFinalTranscript(spokenText);
+          stopListening();
+          handleSendText(spokenText);
         }
       };
 
+      // 5. Add onerror handler showing real error (no-speech, not-allowed, network, aborted)
+      // and auto-focus the "type a query" box
       recognition.onerror = (event: any) => {
-        console.warn('SpeechRecognition error:', event.error);
+        const errType = event?.error || 'unknown';
+        console.warn('SpeechRecognition error encountered:', errType);
         stopListening();
-        if (event.error === 'not-allowed') {
-          setErrorMessage('Microphone access was denied. Please check browser permissions.');
-        } else if (event.error !== 'no-speech') {
-          setErrorMessage(`Speech recognition notice: ${event.error}`);
-        }
         setPhase('idle');
-        setStatusMessage('Tap microphone to speak to Senpai');
+        setStatusMessage(t.tapToSpeak);
+
+        let userFriendlyMsg = '';
+        switch (errType) {
+          case 'no-speech':
+            userFriendlyMsg = 'No speech detected. Please speak closer to your microphone or type your query below.';
+            break;
+          case 'not-allowed':
+          case 'permission-denied':
+            userFriendlyMsg = 'Microphone permission was denied. Please allow microphone access in your browser or type your query below.';
+            break;
+          case 'network':
+            userFriendlyMsg = 'Network error communicating with speech recognition service. Please check your connection or type below.';
+            break;
+          case 'aborted':
+            userFriendlyMsg = 'Speech recognition was aborted. Tap the microphone to try again or type below.';
+            break;
+          case 'audio-capture':
+            userFriendlyMsg = 'Audio capture failed. Ensure your microphone is working and not used by another application.';
+            break;
+          default:
+            userFriendlyMsg = `Speech recognition error: ${errType}. You can type your query below.`;
+            break;
+        }
+
+        setErrorMessage(userFriendlyMsg);
+        setShowTextInput(true);
+        setTimeout(() => {
+          queryInputRef.current?.focus();
+        }, 150);
       };
 
+      // 6. On normal end without error or result
       recognition.onend = () => {
         stopListening();
-        // If we captured a transcript, automatically send it
-        const textToSend = finalTranscript.trim() || interimTranscript.trim();
-        if (textToSend) {
-          handleSendText(textToSend);
-        } else {
-          setPhase('idle');
-          setStatusMessage('Tap microphone to speak to Senpai');
-        }
+        setPhase((curr) => (curr === 'listening' ? 'idle' : curr));
+        setStatusMessage((curr) => (curr === 'Listening…' ? t.tapToSpeak : curr));
       };
 
       recognition.start();
@@ -303,8 +306,12 @@ export default function SenpaiScreen({
       console.error('Failed to start SpeechRecognition:', err);
       stopListening();
       setPhase('idle');
-      setStatusMessage('Tap microphone to speak to Senpai');
-      setErrorMessage(`Could not start speech recognition: ${err.message || 'Error occurred'}`);
+      setStatusMessage(t.tapToSpeak);
+      setErrorMessage(`Could not start speech recognition: ${err?.message || 'Error occurred'}. Please type below.`);
+      setShowTextInput(true);
+      setTimeout(() => {
+        queryInputRef.current?.focus();
+      }, 150);
     }
   };
 
@@ -472,7 +479,7 @@ export default function SenpaiScreen({
             className="w-full py-2 px-3 rounded-[14px] ai-rainbow-gradient text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
           >
             <Camera className="w-3.5 h-3.5" />
-            <span>Launch Camera Scanner Now</span>
+            <span>{t.inspectLabel}</span>
           </button>
         </div>
       );
@@ -499,12 +506,12 @@ export default function SenpaiScreen({
               </span>
             </div>
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#FBBC04]/20 text-[#FBBC04]">
-              &lt; {filterDays} Days
+              &lt; {filterDays} {t.days}
             </span>
           </div>
 
           <div className="text-xs mb-2.5">
-            Found <span className="font-bold text-[#EA4335]">{expiringItems.length}</span> batches requiring prompt action in the next {filterDays} days.
+            <span className="font-bold text-[#EA4335]">{expiringItems.length}</span> {t.attentionNeeded} ({filterDays} {t.days}).
           </div>
 
           {expiringItems.length > 0 && (
@@ -527,7 +534,7 @@ export default function SenpaiScreen({
                         : 'bg-[#FBBC04]/20 text-[#FBBC04]'
                     }`}
                   >
-                    {item.status.toUpperCase()}
+                    {item.status === 'expired' ? t.statusExpired : t.statusExpiring}
                   </span>
                 </div>
               ))}
@@ -539,7 +546,7 @@ export default function SenpaiScreen({
             onClick={() => onNavigateToInventory('expiring')}
             className="w-full py-2 px-3 rounded-[14px] bg-[#FBBC04] hover:bg-[#e2a900] text-black font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
           >
-            <span>View At-Risk Items in Inventory</span>
+            <span>{t.viewInventory}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -573,12 +580,12 @@ export default function SenpaiScreen({
               </span>
             </div>
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#34A853]/20 text-[#34A853]">
-              Need: {quantity} units
+              {t.quantity}: {quantity}
             </span>
           </div>
 
           <p className="text-xs mb-2">
-            Verified suppliers for <strong className="font-semibold">{materialName}</strong>:
+            {t.suppliersFound} (<strong className="font-semibold">{materialName}</strong>):
           </p>
 
           <div className="space-y-1.5 mb-3">
@@ -591,7 +598,7 @@ export default function SenpaiScreen({
               >
                 <div>
                   <div className="font-bold">{sup.name}</div>
-                  <div className="text-[10px] text-slate-400">ETA: {sup.leadDays} • {sup.rating} reliable</div>
+                  <div className="text-[10px] text-slate-400">ETA: {sup.leadDays} • {sup.rating} {t.reliability}</div>
                 </div>
                 <div className="text-right">
                   <div className="font-extrabold text-[#34A853]">{sup.quote}</div>
@@ -606,7 +613,7 @@ export default function SenpaiScreen({
             className="w-full py-2 px-3 rounded-[14px] bg-[#34A853] hover:bg-[#2d9247] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
           >
             <FileCheck className="w-3.5 h-3.5" />
-            <span>Draft PO with Top Supplier</span>
+            <span>{t.draftPoWithSupplier}</span>
           </button>
         </div>
       );
@@ -634,11 +641,11 @@ export default function SenpaiScreen({
                 <FileCheck className="w-4 h-4" />
               </span>
               <span className="text-xs font-bold font-['Google_Sans',sans-serif] text-[#9B72CB]">
-                Tool: draftOrder (PO Draft)
+                Tool: draftOrder (PO)
               </span>
             </div>
             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#9B72CB]/20 text-[#9B72CB]">
-              {urgency} Priority
+              {urgency}
             </span>
           </div>
 
@@ -648,11 +655,11 @@ export default function SenpaiScreen({
           </div>
 
           <div className={`rounded-[12px] p-2 text-xs mb-2.5 border ${isDark ? 'bg-white/5 border-white/5' : 'bg-white border-slate-200'}`}>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold mb-1">Requisition Items</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold mb-1">{t.items}</div>
             {items.map((it, idx) => (
               <div key={idx} className="flex items-center justify-between py-1 border-b border-white/5 last:border-b-0">
                 <span className="font-medium">{it.name}</span>
-                <span className="font-bold">{it.quantity} {it.unit || 'units'}</span>
+                <span className="font-bold">{it.quantity} {it.unit || ''}</span>
               </div>
             ))}
           </div>
@@ -660,7 +667,7 @@ export default function SenpaiScreen({
           {isApproved ? (
             <div className="py-2 px-3 rounded-[14px] bg-[#34A853]/20 border border-[#34A853]/40 text-[#34A853] text-xs font-bold flex items-center justify-center gap-1.5">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Purchase Order Approved & Transmitted</span>
+              <span>{t.poApproved}</span>
             </div>
           ) : (
             <button
@@ -669,7 +676,7 @@ export default function SenpaiScreen({
               className="w-full py-2 px-3 rounded-[14px] ai-rainbow-gradient text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Approve & Transmit PO</span>
+              <span>{t.approvePo}</span>
             </button>
           )}
         </div>
@@ -690,9 +697,11 @@ export default function SenpaiScreen({
         }`}
       >
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-slate-400">Language:</span>
+          <span className="text-[11px] font-semibold text-slate-400">
+            {currentLang === 'KN' ? 'ಭಾಷೆ:' : currentLang === 'HI' ? 'भाषा:' : 'Language:'}
+          </span>
 
-          {/* Language Selector Chips: EN / HI / KN */}
+          {/* Unified Language Selector Chips: EN / HI / KN */}
           <div className="flex items-center rounded-full p-0.5 border border-white/10 bg-black/20">
             {SUPPORTED_LANGUAGES.map((lang) => {
               const isSelected = currentLang === lang.code;
@@ -700,10 +709,7 @@ export default function SenpaiScreen({
                 <button
                   key={lang.code}
                   type="button"
-                  onClick={() => {
-                    onLanguageChange(lang.code);
-                    speakText(`Language switched to ${lang.label}`, lang.code);
-                  }}
+                  onClick={() => setLanguage(lang.code)}
                   className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
                     isSelected
                       ? 'ai-rainbow-gradient text-white shadow-sm'
@@ -733,7 +739,7 @@ export default function SenpaiScreen({
               }`}
             >
               <Zap className="w-3 h-3" />
-              <span>Senpai Orb</span>
+              <span>{t.senpaiOrbTab}</span>
             </button>
             <button
               type="button"
@@ -745,7 +751,7 @@ export default function SenpaiScreen({
               }`}
             >
               <MessageSquare className="w-3 h-3" />
-              <span>Log ({messages.length})</span>
+              <span>{t.chatLogTab} ({messages.length})</span>
             </button>
           </div>
 
@@ -763,10 +769,10 @@ export default function SenpaiScreen({
                 ? 'bg-white/5 border-white/10 text-slate-400'
                 : 'bg-slate-100 border-slate-200 text-slate-500'
             }`}
-            title={autoSpeakAnswers ? 'SpeechSynthesis TTS Auto-Speak ON' : 'SpeechSynthesis TTS OFF'}
+            title={autoSpeakAnswers ? t.ttsOn : t.ttsOff}
           >
             {autoSpeakAnswers ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
-            <span>TTS {autoSpeakAnswers ? 'ON' : 'OFF'}</span>
+            <span>{autoSpeakAnswers ? t.ttsOn : t.ttsOff}</span>
           </button>
         </div>
       </div>
@@ -885,7 +891,7 @@ export default function SenpaiScreen({
                       }`}
                     >
                       <Sparkles className="w-12 h-12 text-[#9B72CB] animate-pulse" />
-                      <span className="font-bold text-sm mt-2">Senpai Analyzing...</span>
+                      <span className="font-bold text-sm mt-2">{t.analyzingWithGemini}</span>
                     </div>
                   </div>
 
@@ -915,7 +921,7 @@ export default function SenpaiScreen({
                           </div>
                           <div>
                             <span className="text-xs font-black font-['Google_Sans',sans-serif] tracking-wider uppercase text-[#4285F4]">
-                              Senpai Result
+                              {t.resultReady}
                             </span>
                             <span className="text-[10px] text-slate-400 block">{latestAnswer?.timestamp}</span>
                           </div>
@@ -1151,7 +1157,11 @@ export default function SenpaiScreen({
             )}
           </p>
           <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            Local browser speech-to-text • Gemini tool reasoning • TTS spoken back in {currentLang}
+            {currentLang === 'KN'
+              ? 'ಸ್ಥಳೀಯ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ • ಜೆಮಿನಿ ಪರಿಕರಗಳು • ಕನ್ನಡ ಧ್ವನಿ (kn-IN)'
+              : currentLang === 'HI'
+              ? 'स्थानीय वाक् पहचान • जेमिनी टूल्स • हिंदी आवाज़ (hi-IN)'
+              : `Local browser speech-to-text • Gemini tool reasoning • TTS spoken back in ${currentLang}`}
           </p>
         </div>
 
@@ -1164,12 +1174,12 @@ export default function SenpaiScreen({
               isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            <span>{showTextInput ? 'Hide keyboard input' : 'Or type a query'}</span>
+            <span>{showTextInput ? t.hideKeyboard : t.orTypeQuery}</span>
           </button>
 
           {!isSpeechSupported && (
             <span className="text-[10px] text-[#FBBC04] font-medium">
-              Speech-to-text unavailable in this browser
+              {t.speechUnavailable}
             </span>
           )}
         </div>
@@ -1184,6 +1194,7 @@ export default function SenpaiScreen({
             className="w-full mt-2 flex items-center gap-2"
           >
             <input
+              ref={queryInputRef}
               type="text"
               value={typedPrompt}
               onChange={(e) => setTypedPrompt(e.target.value)}
