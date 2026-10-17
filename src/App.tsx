@@ -25,7 +25,11 @@ import {
   Clock,
   Trash2,
   Plus,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  Sun,
+  Moon,
+  Compass
 } from 'lucide-react';
 import { sendToGemini, ExtractionResult, EXTRACTION_PROMPT } from './services/gemini';
 import {
@@ -36,6 +40,11 @@ import {
   computeMaterialStatus,
   calculateExpiryDate
 } from './services/materialService';
+import SenpaiScreen from './components/SenpaiScreen';
+import BankaiTodayCard from './components/BankaiTodayCard';
+import MaterialDetailsModal from './components/MaterialDetailsModal';
+import { AppLanguage, SUPPORTED_LANGUAGES, speakText } from './services/speechService';
+import { Mic, Flame, History } from 'lucide-react';
 
 // Re-export for external consumer/tests
 export { sendToGemini, EXTRACTION_PROMPT };
@@ -51,7 +60,7 @@ const SAMPLE_PHOTOS = [
   {
     name: 'grocery_coffee.jpg',
     url: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1200&q=80',
-    type: 'Receipt / Coffee',
+    type: 'Label: Coffee',
     size: '1.4 MB',
     mock: {
       name: 'Organic Fairtrade Coffee Beans',
@@ -67,7 +76,7 @@ const SAMPLE_PHOTOS = [
   {
     name: 'medicine_box.jpg',
     url: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=1200&q=80',
-    type: 'Medicine / Pharma',
+    type: 'Label: Medicine',
     size: '1.8 MB',
     mock: {
       name: 'Amoxicillin 500mg Capsules',
@@ -83,7 +92,7 @@ const SAMPLE_PHOTOS = [
   {
     name: 'chemical_reagent.jpg',
     url: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&w=1200&q=80',
-    type: 'Laboratory Reagent',
+    type: 'Label: Chemical',
     size: '980 KB',
     mock: {
       name: 'Sodium Chloride Analytical Grade',
@@ -96,13 +105,28 @@ const SAMPLE_PHOTOS = [
     },
     shelfLifeDays: 60,
   },
+  {
+    name: 'random_photo.jpg',
+    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+    type: 'Non-Label (Beach)',
+    size: '1.1 MB',
+    mock: {
+      name: 'No label detected',
+      category: null,
+      batchNo: null,
+      purchaseDate: null,
+      quantity: null,
+      unit: null,
+      confidence: 0,
+    },
+    shelfLifeDays: 90,
+  },
 ];
 
-type ActiveTab = 'scan' | 'inventory';
+type ActiveTab = 'scan' | 'inventory' | 'senpai';
 type ScanMode = 'document' | 'photo' | 'id_card';
-// Unified review stage allows seamless shared-element morphing: preview -> extracting -> extracted
-type ReviewStage = 'preview' | 'extracting' | 'extracted';
 type StatusFilter = 'all' | 'ok' | 'expiring' | 'expired';
+type ThemeMode = 'dark' | 'light';
 
 interface CapturedPhotoData {
   dataUrl: string;
@@ -115,14 +139,19 @@ interface CapturedPhotoData {
 }
 
 export default function App() {
-  // Navigation tabs: 'scan' or 'inventory'
-  const [activeTab, setActiveTab] = useState<ActiveTab>('scan');
+  // Theme state: defaults to dark (looks more premium)
+  const [theme, setTheme] = useState<ThemeMode>('dark');
 
-  // Scanner screens: 'camera' or 'review'
+  // Navigation tabs: 'scan', 'inventory', or 'senpai'
+  const [activeTab, setActiveTab] = useState<ActiveTab>('scan');
+  const [currentLang, setCurrentLang] = useState<AppLanguage>('EN');
+  const [senpaiInitialPrompt, setSenpaiInitialPrompt] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
 
-  // Review stage during the shared-element transition: 'preview' -> 'extracting' -> 'extracted'
-  const [reviewStage, setReviewStage] = useState<ReviewStage>('preview');
+  // 3D Card Flip Transition state
+  const [isCardFlipped, setIsCardFlipped] = useState<boolean>(false);
+  const [isSheenActive, setIsSheenActive] = useState<boolean>(false);
+  const [isGeminiLoading, setIsGeminiLoading] = useState<boolean>(false);
 
   // Captured image
   const [capturedPhoto, setCapturedPhoto] = useState<CapturedPhotoData | null>(null);
@@ -138,6 +167,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedMaterialForDetails, setSelectedMaterialForDetails] = useState<MaterialItem | null>(null);
 
   // Camera UI controls
   const [selectedMode, setSelectedMode] = useState<ScanMode>('document');
@@ -173,7 +203,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Open camera using <input type="file" accept="image/*" capture="environment">
   const handleOpenDeviceCamera = () => {
     if (cameraInputRef.current) {
       cameraInputRef.current.value = '';
@@ -181,7 +210,6 @@ export default function App() {
     }
   };
 
-  // Open file gallery
   const handleOpenGallery = () => {
     if (galleryInputRef.current) {
       galleryInputRef.current.value = '';
@@ -189,7 +217,6 @@ export default function App() {
     }
   };
 
-  // Process captured/selected file
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -214,14 +241,14 @@ export default function App() {
         setRotation(0);
         setShelfLifeDays(90);
         setIsCameraActive(false);
-        setReviewStage('preview');
+        setIsCardFlipped(false);
+        setIsSheenActive(false);
       };
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   };
 
-  // Drag and drop handler
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
@@ -229,67 +256,76 @@ export default function App() {
     }
   };
 
-  // Retake photo: reset and open camera again
   const handleRetake = () => {
     setCapturedPhoto(null);
     setExtractedData(null);
     setExtractionError(null);
     setRotation(0);
     setIsCameraActive(true);
-    setReviewStage('preview');
+    setIsCardFlipped(false);
+    setIsSheenActive(false);
     setTimeout(() => {
       handleOpenDeviceCamera();
     }, 150);
   };
 
   /**
-   * Signature shared-element transition:
-   * On "Use photo", photo shrinks and morphs into the top of the result card,
-   * skeleton shimmer displays while Gemini reads,
-   * then extracted fields cascade in one-by-one and status chip stamps in!
+   * Signature 3D Card Flip Transition on "Use photo":
+   * 1. FRONT face (captured photo) flips to BACK face (result card) via rotateY 0 -> 180deg over ~700ms.
+   * 2. Sheen light-sweep activates across surface.
+   * 3. Calls sendToGemini and saves to Firestore.
    */
   const handleUsePhoto = async () => {
     if (!capturedPhoto?.dataUrl) return;
 
-    // Trigger the morph: immediately shrink photo into the top of result card with cubic-bezier ease-out
-    setReviewStage('extracting');
+    // Trigger the 3D flip immediately!
+    setIsCardFlipped(true);
+    setIsSheenActive(true);
+    setIsGeminiLoading(true);
     setExtractionError(null);
+
+    // Reset sheen trigger after 1s animation
+    setTimeout(() => {
+      setIsSheenActive(false);
+    }, 1100);
 
     let extracted: ExtractionResult | null = null;
 
     try {
       extracted = await sendToGemini(capturedPhoto.dataUrl);
     } catch (err: any) {
-      console.warn('sendToGemini live call error, evaluating fallback:', err);
+      console.warn('sendToGemini error, fallback evaluation:', err);
       if (capturedPhoto.sampleMock) {
         extracted = capturedPhoto.sampleMock;
       } else {
         extracted = {
-          name: capturedPhoto.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
-          category: 'General Supplies',
-          batchNo: `LOT-${Math.floor(1000 + Math.random() * 9000)}`,
-          purchaseDate: new Date().toISOString().split('T')[0],
-          quantity: 1,
-          unit: 'pcs',
-          confidence: 0.95,
+          name: 'No label detected',
+          category: null,
+          batchNo: null,
+          purchaseDate: null,
+          quantity: null,
+          unit: null,
+          confidence: 0,
         };
       }
     }
 
     setExtractedData(extracted);
+    setIsGeminiLoading(false);
 
     try {
-      await saveMaterialToFirestore(extracted, shelfLifeDays);
-      triggerNotice('Saved to Firestore "materials" with status "ok"!');
-      // Morph stage advances to extracted: fields cascade in, status chip stamps in!
-      setReviewStage('extracted');
+      if (extracted.name && extracted.name !== 'No label detected') {
+        await saveMaterialToFirestore(extracted, shelfLifeDays);
+        triggerNotice('Saved to Firestore collection "materials" with status "ok"!');
+      } else {
+        triggerNotice('Analyzed: No product label detected.');
+      }
     } catch (dbErr: any) {
       console.error('Failed to save to Firestore:', dbErr);
-      setExtractionError(dbErr?.message || 'Failed to write document to Firestore.');
+      setExtractionError(dbErr?.message || 'Failed to save to Firestore.');
     }
   };
 
-  // Load a quick sample photo for instant testing
   const handleLoadSample = (sample: (typeof SAMPLE_PHOTOS)[0]) => {
     setCapturedPhoto({
       dataUrl: sample.url,
@@ -303,10 +339,10 @@ export default function App() {
     setShelfLifeDays(sample.shelfLifeDays || 90);
     setRotation(0);
     setIsCameraActive(false);
-    setReviewStage('preview');
+    setIsCardFlipped(false);
+    setIsSheenActive(false);
   };
 
-  // Delete material
   const handleDeleteMaterial = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -320,7 +356,6 @@ export default function App() {
     }
   };
 
-  // Filter materials based on search query and status filter
   const filteredMaterials = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return materials.filter((item) => {
@@ -343,7 +378,6 @@ export default function App() {
     });
   }, [materials, searchQuery, statusFilter]);
 
-  // Counts by status
   const statusCounts = useMemo(() => {
     let ok = 0;
     let expiring = 0;
@@ -359,9 +393,45 @@ export default function App() {
     return { all: materials.length, ok, expiring, expired };
   }, [materials]);
 
+  const isDark = theme === 'dark';
+
   return (
-    <div className="min-h-screen bg-[#f4f6f9] text-[#1f2733] flex flex-col justify-between items-center selection:bg-[#e8f0fe] selection:text-[#1a73e8]">
-      {/* Hidden camera input required by user prompt */}
+    <div
+      className={`min-h-screen relative overflow-hidden transition-colors duration-500 flex flex-col justify-between items-center ${
+        isDark ? 'bg-[#0b0d12] text-white selection:bg-[#4285F4]/30' : 'bg-[#f8fafc] text-[#1f2733] selection:bg-[#4285F4]/20'
+      }`}
+    >
+      {/* ------------------------------------------------------------- */}
+      {/* BACKGROUND: SOFT, DRIFTING GOOGLE-COLOURED AURORA GRADIENT MESH */}
+      {/* ------------------------------------------------------------- */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        {/* Google Blue Blob */}
+        <div
+          className={`absolute top-[-10%] left-[-15%] w-[420px] h-[420px] rounded-full blur-[90px] aurora-blob-blue transition-opacity duration-700 ${
+            isDark ? 'bg-[#4285F4]/16' : 'bg-[#4285F4]/10'
+          }`}
+        />
+        {/* Google Red Blob */}
+        <div
+          className={`absolute top-[35%] right-[-15%] w-[380px] h-[380px] rounded-full blur-[100px] aurora-blob-red transition-opacity duration-700 ${
+            isDark ? 'bg-[#EA4335]/14' : 'bg-[#EA4335]/8'
+          }`}
+        />
+        {/* Google Green Blob */}
+        <div
+          className={`absolute bottom-[-10%] left-[10%] w-[400px] h-[400px] rounded-full blur-[95px] aurora-blob-green transition-opacity duration-700 ${
+            isDark ? 'bg-[#34A853]/15' : 'bg-[#34A853]/9'
+          }`}
+        />
+        {/* Google Yellow Blob */}
+        <div
+          className={`absolute top-[15%] right-[25%] w-[320px] h-[320px] rounded-full blur-[85px] aurora-blob-yellow transition-opacity duration-700 ${
+            isDark ? 'bg-[#FBBC04]/12' : 'bg-[#FBBC04]/8'
+          }`}
+        />
+      </div>
+
+      {/* Hidden camera and gallery inputs */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -371,8 +441,6 @@ export default function App() {
         className="hidden"
         aria-label="Camera Capture Input"
       />
-
-      {/* Hidden gallery fallback input */}
       <input
         ref={galleryInputRef}
         type="file"
@@ -382,74 +450,147 @@ export default function App() {
         aria-label="File Upload Input"
       />
 
-      {/* Mobile-first viewport container (Max width 440px with realistic mobile proportions) */}
-      <div className="w-full max-w-[440px] min-h-screen bg-[#f4f6f9] flex flex-col relative shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:my-4 sm:min-h-[844px] sm:max-h-[920px] sm:rounded-[24px] sm:border sm:border-[#e2e8f0] overflow-hidden">
-        
-        {/* Floating feedback toast */}
+      {/* Main Mobile-First Shell (440px max width) */}
+      <div
+        className={`w-full max-w-[440px] min-h-screen sm:my-4 sm:min-h-[844px] sm:max-h-[920px] sm:rounded-[28px] flex flex-col relative z-10 overflow-hidden transition-all duration-300 shadow-[0_24px_60px_rgba(0,0,0,0.5)] border ${
+          isDark
+            ? 'bg-[#10131b]/80 border-white/10 backdrop-blur-2xl'
+            : 'bg-white/85 border-slate-200/90 backdrop-blur-2xl'
+        }`}
+      >
+        {/* Toast Notice */}
         {feedbackNotice && (
-          <div className="absolute top-16 left-4 right-4 z-50 bg-[#1f2733] text-white px-4 py-3 rounded-[16px] text-xs font-medium flex items-center justify-between m3-elevation-3 transition-all animate-bounce">
+          <div className="absolute top-16 left-4 right-4 z-50 bg-[#161a24]/95 text-white px-4 py-3 rounded-[20px] text-xs font-medium flex items-center justify-between border border-white/15 shadow-2xl backdrop-blur-xl animate-bounce">
             <span className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[#8ab4f8] flex-shrink-0" />
+              <Sparkles className="w-4 h-4 text-[#FBBC04] flex-shrink-0" />
               <span className="line-clamp-2">{feedbackNotice}</span>
             </span>
           </div>
         )}
 
+        {/* Global Header */}
+        <header
+          className={`h-16 px-4 flex items-center justify-between z-20 flex-shrink-0 border-b transition-colors ${
+            isDark ? 'bg-[#10131b]/60 border-white/10' : 'bg-white/60 border-slate-200/70'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {/* Signature Rainbow Sparkle Logo */}
+            <div className="w-10 h-10 rounded-[14px] ai-rainbow-gradient p-[1.5px] flex items-center justify-center shadow-lg">
+              <div
+                className={`w-full h-full rounded-[13px] flex items-center justify-center ${
+                  isDark ? 'bg-[#0e1118]' : 'bg-white'
+                }`}
+              >
+                <Sparkles className="w-5 h-5 text-[#4285F4]" />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-lg font-bold tracking-tight font-['Google_Sans',sans-serif]">
+                  Jarvis Senpai
+                </h1>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-[6px] ai-rainbow-gradient text-white shadow-sm">
+                  2026
+                </span>
+              </div>
+              <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {activeTab === 'scan'
+                  ? 'Multimodal Material Vision'
+                  : activeTab === 'inventory'
+                  ? 'Cloud Firestore Inventory'
+                  : 'Voice Agent & Registered Tools'}
+              </p>
+            </div>
+          </div>
+
+          {/* Right Header Actions: Language Chips + Theme Toggle */}
+          <div className="flex items-center gap-2">
+            {/* Small Language Chips: EN / HI / KN */}
+            <div className={`flex items-center rounded-full p-0.5 border ${isDark ? 'bg-black/30 border-white/10' : 'bg-slate-100 border-slate-200'}`}>
+              {(['EN', 'HI', 'KN'] as AppLanguage[]).map((lang) => {
+                const isSelected = currentLang === lang;
+                return (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => {
+                      setCurrentLang(lang);
+                      speakText(`Language switched to ${lang}`, lang);
+                    }}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'ai-rainbow-gradient text-white shadow-sm'
+                        : isDark
+                        ? 'text-slate-400 hover:text-white'
+                        : 'text-slate-600 hover:text-black'
+                    }`}
+                    title={`Switch language to ${lang}`}
+                  >
+                    {lang}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Theme Toggle (Dark / Light) */}
+            <button
+              type="button"
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className={`w-9 h-9 rounded-[12px] flex items-center justify-center transition-all cursor-pointer border ${
+                isDark
+                  ? 'bg-white/[0.06] border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.12]'
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+              }`}
+              title={isDark ? 'Switch to Light aurora' : 'Switch to Dark aurora'}
+              aria-label="Toggle Theme"
+            >
+              {isDark ? <Sun className="w-4 h-4 text-[#FBBC04]" /> : <Moon className="w-4 h-4 text-[#4285F4]" />}
+            </button>
+          </div>
+        </header>
+
         {/* ============================================================= */}
-        {/* TAB 1: SCAN FLOW                                              */}
+        {/* TAB 1: SCAN SCREEN (HOME)                                     */}
         {/* ============================================================= */}
         {activeTab === 'scan' && (
-          <div className="flex-1 flex flex-col justify-between bg-[#f4f6f9] h-full overflow-hidden">
-            {/* VIEW A: CAMERA VIEWFINDER (STANDALONE) */}
+          <div className="flex-1 flex flex-col justify-between h-full overflow-hidden">
+            {/* VIEW A: CAMERA VIEWFINDER & BANKAI BRIEFING */}
             {isCameraActive && (
-              <div className="flex-1 flex flex-col justify-between h-full bg-[#f4f6f9]">
-                <header className="h-16 px-4 flex items-center justify-between bg-white border-b border-[#e2e8f0] z-10">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#e8f0fe] flex items-center justify-center text-[#1a73e8]">
-                      <ScanLine className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h1 className="text-xl font-bold tracking-tight text-[#1f2733] font-['Google_Sans',sans-serif]">
-                        Scan
-                      </h1>
-                      <p className="text-xs text-[#5a6675] font-normal">Capture material or label</p>
-                    </div>
-                  </div>
+              <div className="flex-1 flex flex-col justify-between h-full overflow-y-auto">
+                {/* BANKAI — TODAY CARD (Open alerts & pending tasks briefing) */}
+                <BankaiTodayCard
+                  isDark={isDark}
+                  materials={materials}
+                  currentLang={currentLang}
+                  onLanguageChange={setCurrentLang}
+                  onNavigateToInventory={(filter) => {
+                    setActiveTab('inventory');
+                    if (filter) setStatusFilter(filter);
+                  }}
+                  onNavigateToScan={(item) => {
+                    setActiveTab('scan');
+                    setIsCameraActive(true);
+                    setIsCardFlipped(false);
+                    if (item) triggerNotice(`Targeting material: ${item}`);
+                  }}
+                  onNavigateToSenpai={(prompt) => {
+                    setActiveTab('senpai');
+                    if (prompt) setSenpaiInitialPrompt(prompt);
+                  }}
+                />
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setFlashOn(!flashOn)}
-                      className={`w-12 h-12 flex items-center justify-center rounded-full transition-colors active:bg-[#e8f0fe] ${
-                        flashOn ? 'bg-[#fef7e0] text-[#b06000]' : 'text-[#5a6675] hover:bg-[#f4f6f9]'
-                      }`}
-                      title={flashOn ? 'Flash On' : 'Flash Off'}
-                      aria-label="Toggle Flash"
-                    >
-                      {flashOn ? <Zap className="w-5 h-5 fill-current" /> : <ZapOff className="w-5 h-5" />}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowGrid(!showGrid)}
-                      className={`w-12 h-12 flex items-center justify-center rounded-full transition-colors active:bg-[#e8f0fe] ${
-                        showGrid ? 'bg-[#e8f0fe] text-[#1a73e8]' : 'text-[#5a6675] hover:bg-[#f4f6f9]'
-                      }`}
-                      title={showGrid ? 'Grid enabled' : 'Grid disabled'}
-                      aria-label="Toggle Grid"
-                    >
-                      <Grid className="w-5 h-5" />
-                    </button>
-                  </div>
-                </header>
-
-                {/* Filter Chips */}
-                <div className="px-4 py-2.5 flex items-center justify-center gap-2 bg-white border-b border-[#e2e8f0]">
+                {/* Mode Selector Chips: Frosted Glass */}
+                <div
+                  className={`px-4 py-2.5 flex items-center justify-center gap-2 border-b transition-colors ${
+                    isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50/50 border-slate-200/50'
+                  }`}
+                >
                   {(
                     [
                       { id: 'document', label: 'Material Label', icon: Tag },
-                      { id: 'photo', label: 'Box / Package', icon: Camera },
-                      { id: 'id_card', label: 'Receipt / Invoice', icon: Hash },
+                      { id: 'photo', label: 'Product Box', icon: Camera },
+                      { id: 'id_card', label: 'LOT / Batch Tag', icon: Hash },
                     ] as const
                   ).map((mode) => {
                     const isSelected = selectedMode === mode.id;
@@ -459,10 +600,12 @@ export default function App() {
                         key={mode.id}
                         type="button"
                         onClick={() => setSelectedMode(mode.id)}
-                        className={`h-9 px-3 rounded-[16px] text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                        className={`h-9 px-3.5 rounded-[20px] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
                           isSelected
-                            ? 'bg-[#e8f0fe] text-[#1a73e8] border border-[#1a73e8]/30 font-semibold m3-elevation-1'
-                            : 'bg-white text-[#5a6675] border border-[#e2e8f0] hover:bg-[#f4f6f9]'
+                            ? 'ai-rainbow-gradient text-white border-transparent shadow-[0_4px_16px_rgba(66,133,244,0.35)]'
+                            : isDark
+                            ? 'bg-white/[0.05] border-white/10 text-slate-300 hover:bg-white/[0.1]'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
                         <IconComponent className="w-3.5 h-3.5" />
@@ -472,16 +615,17 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Viewfinder: Dark */}
+                {/* Viewfinder: Signature Rainbow Reticle & Dark Lens */}
                 <div className="flex-1 px-4 py-2 flex flex-col justify-center">
                   <div
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleDrop}
                     onClick={handleOpenDeviceCamera}
-                    className="relative w-full aspect-[3/4] max-h-[410px] mx-auto rounded-[16px] overflow-hidden bg-gradient-to-b from-[#202124] to-[#121316] text-white flex flex-col items-center justify-between p-4 cursor-pointer m3-elevation-2 transition-all group hover:ring-2 hover:ring-[#1a73e8]/40"
+                    className="relative w-full aspect-[3/4] max-h-[400px] mx-auto rounded-[24px] overflow-hidden bg-gradient-to-b from-[#0f121a] to-[#07080c] text-white flex flex-col items-center justify-between p-4 cursor-pointer shadow-2xl transition-all group border border-white/10 hover:border-white/20"
                   >
+                    {/* Viewfinder Grid */}
                     {showGrid && (
-                      <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-20">
+                      <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-15">
                         <div className="border-r border-b border-white"></div>
                         <div className="border-r border-b border-white"></div>
                         <div className="border-b border-white"></div>
@@ -494,44 +638,67 @@ export default function App() {
                       </div>
                     )}
 
-                    <div className="absolute inset-6 pointer-events-none">
-                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#1a73e8] rounded-tl-[8px] drop-shadow-md"></div>
-                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#1a73e8] rounded-tr-[8px] drop-shadow-md"></div>
-                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#1a73e8] rounded-bl-[8px] drop-shadow-md"></div>
-                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#1a73e8] rounded-br-[8px] drop-shadow-md"></div>
+                    {/* SIGNATURE RAINBOW RETICLE BRACKETS */}
+                    <div className="absolute inset-5 pointer-events-none">
+                      {/* Top-Left */}
+                      <div className="absolute top-0 left-0 w-8 h-8 rounded-tl-[10px] border-t-[3.5px] border-l-[3.5px] border-[#4285F4] drop-shadow-[0_0_8px_rgba(66,133,244,0.7)]" />
+                      {/* Top-Right */}
+                      <div className="absolute top-0 right-0 w-8 h-8 rounded-tr-[10px] border-t-[3.5px] border-r-[3.5px] border-[#EA4335] drop-shadow-[0_0_8px_rgba(234,67,53,0.7)]" />
+                      {/* Bottom-Left */}
+                      <div className="absolute bottom-0 left-0 w-8 h-8 rounded-bl-[10px] border-b-[3.5px] border-l-[3.5px] border-[#34A853] drop-shadow-[0_0_8px_rgba(52,168,83,0.7)]" />
+                      {/* Bottom-Right */}
+                      <div className="absolute bottom-0 right-0 w-8 h-8 rounded-br-[10px] border-b-[3.5px] border-r-[3.5px] border-[#FBBC04] drop-shadow-[0_0_8px_rgba(251,188,4,0.7)]" />
                     </div>
 
+                    {/* Top status bar in lens */}
                     <div className="w-full flex items-center justify-between z-10">
-                      <span className="text-[11px] font-medium uppercase px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md text-white/90 border border-white/10 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-[#188038] animate-pulse"></span>
-                        Device Camera
+                      <span className="text-[11px] font-semibold tracking-wide uppercase px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white/90 border border-white/15 flex items-center gap-1.5 shadow-lg">
+                        <span className="w-2 h-2 rounded-full bg-[#34A853] animate-pulse"></span>
+                        Gemini Lens Active
                       </span>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowGrid(!showGrid);
+                        }}
+                        className="p-1.5 rounded-full bg-black/40 text-white/80 hover:text-white border border-white/10"
+                      >
+                        <Grid className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
+                    {/* Center prompt */}
                     <div className="z-10 text-center flex flex-col items-center px-4">
-                      <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform">
-                        <Camera className="w-7 h-7 text-[#8ab4f8]" />
+                      <div className="w-16 h-16 rounded-full ai-rainbow-gradient p-[2px] shadow-[0_0_24px_rgba(66,133,244,0.4)] mb-3 group-hover:scale-105 transition-transform">
+                        <div className="w-full h-full rounded-full bg-black/75 backdrop-blur-md flex items-center justify-center">
+                          <Camera className="w-7 h-7 text-white" />
+                        </div>
                       </div>
-                      <p className="text-sm font-medium text-white drop-shadow">
+                      <p className="text-sm font-bold text-white drop-shadow">
                         Tap anywhere to capture
                       </p>
-                      <p className="text-xs text-white/70 mt-1 max-w-[220px]">
-                        Seamlessly morphs into result card upon use
+                      <p className="text-xs text-slate-300 mt-1 max-w-[220px]">
+                        Flips seamlessly in 3D into the extracted material card
                       </p>
                     </div>
 
-                    <div className="z-10 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[11px] text-white/80 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#8ab4f8]" />
-                      <span>Gemini Auto-Extraction Ready</span>
+                    {/* Bottom pill in lens */}
+                    <div className="z-10 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 text-[11px] font-medium text-white/90 flex items-center gap-2 shadow-lg">
+                      <Sparkles className="w-3.5 h-3.5 text-[#FBBC04]" />
+                      <span>3D Card Flip on Use</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Quick samples bar */}
-                <div className="px-4 py-1.5 bg-[#f4f6f9]">
-                  <div className="flex items-center justify-between text-[11px] text-[#5a6675] mb-1">
-                    <span className="font-medium">Quick sample materials:</span>
-                    <span className="text-[#1a73e8] font-medium">Tap to test</span>
+                {/* Quick samples bar: Frosted glass chips */}
+                <div className="px-4 py-2">
+                  <div className="flex items-center justify-between text-[11px] font-medium mb-1.5">
+                    <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>
+                      Quick sample presets:
+                    </span>
+                    <span className="text-[#4285F4] font-semibold">Tap to test 3D flip</span>
                   </div>
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                     {SAMPLE_PHOTOS.map((sample, idx) => (
@@ -539,7 +706,11 @@ export default function App() {
                         key={idx}
                         type="button"
                         onClick={() => handleLoadSample(sample)}
-                        className="flex-shrink-0 text-left bg-white hover:bg-[#e8f0fe] border border-[#e2e8f0] hover:border-[#1a73e8] rounded-[16px] px-2.5 py-1.5 transition-colors flex items-center gap-2 m3-elevation-1 cursor-pointer"
+                        className={`flex-shrink-0 text-left rounded-[16px] px-2.5 py-1.5 transition-all flex items-center gap-2 border cursor-pointer ${
+                          isDark
+                            ? 'bg-white/[0.05] border-white/10 hover:border-[#4285F4]/60 hover:bg-white/[0.08]'
+                            : 'bg-white border-slate-200 hover:border-[#4285F4] hover:bg-slate-50'
+                        }`}
                       >
                         <img
                           src={sample.url}
@@ -547,11 +718,15 @@ export default function App() {
                           className="w-7 h-7 rounded-[8px] object-cover"
                         />
                         <div>
-                          <div className="text-[11px] font-semibold text-[#1f2733] truncate max-w-[100px]">
+                          <div
+                            className={`text-[11px] font-bold truncate max-w-[100px] ${
+                              isDark ? 'text-white' : 'text-slate-800'
+                            }`}
+                          >
                             {sample.mock.name}
                           </div>
-                          <div className="text-[10px] text-[#5a6675]">
-                            {sample.shelfLifeDays}d shelf life
+                          <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {sample.type}
                           </div>
                         </div>
                       </button>
@@ -559,45 +734,57 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Bottom Capture Deck */}
-                <div className="bg-white border-t border-[#e2e8f0] px-6 pt-3 pb-3 flex items-center justify-between m3-elevation-2 rounded-t-[20px]">
+                {/* Bottom Capture Deck: Frosted Glass with Rainbow Shutter */}
+                <div
+                  className={`px-6 pt-3 pb-4 flex items-center justify-between border-t transition-colors ${
+                    isDark ? 'bg-[#10131b]/90 border-white/10' : 'bg-white/90 border-slate-200'
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={handleOpenGallery}
-                    className="min-h-[56px] min-w-[56px] h-14 w-14 rounded-[16px] bg-white hover:bg-[#e8f0fe] active:bg-[#d2e3fc] border border-[#e2e8f0] flex flex-col items-center justify-center text-[#5a6675] hover:text-[#1a73e8] transition-all m3-elevation-1 cursor-pointer"
-                    title="Upload image file"
+                    className={`min-h-[56px] min-w-[56px] h-14 w-14 rounded-[20px] flex flex-col items-center justify-center transition-all cursor-pointer border ${
+                      isDark
+                        ? 'bg-white/[0.05] border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.1]'
+                        : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                    }`}
+                    title="Upload photo"
                   >
                     <ImageIcon className="w-5 h-5" />
-                    <span className="text-[9px] font-medium mt-0.5">Gallery</span>
+                    <span className="text-[9px] font-semibold mt-0.5">Gallery</span>
                   </button>
 
+                  {/* Primary Circular Capture Button with Rainbow Glow */}
                   <div className="flex flex-col items-center">
                     <button
                       type="button"
                       onClick={handleOpenDeviceCamera}
-                      className="group relative min-w-[76px] min-h-[76px] w-[76px] h-[76px] rounded-full bg-white p-1.5 flex items-center justify-center transition-all transform active:scale-90 m3-elevation-3 hover:m3-elevation-4 border-2 border-[#1a73e8] cursor-pointer"
+                      className="group relative min-w-[78px] min-h-[78px] w-[78px] h-[78px] rounded-full p-[2.5px] ai-rainbow-gradient flex items-center justify-center transition-all transform active:scale-90 shadow-[0_0_28px_rgba(66,133,244,0.45)] cursor-pointer"
                       title="Capture Photo"
                     >
-                      <span className="absolute inset-0 rounded-full bg-[#1a73e8]/10 group-hover:scale-105 transition-transform"></span>
-                      <span className="relative w-full h-full rounded-full bg-[#1a73e8] group-hover:bg-[#1557b0] flex items-center justify-center text-white transition-colors shadow-inner">
-                        <Camera className="w-7 h-7 text-white" />
+                      <span className="relative w-full h-full rounded-full bg-[#0b0d12] flex items-center justify-center text-white transition-all group-hover:bg-[#161a24]">
+                        <Camera className="w-7 h-7 text-white drop-shadow" />
                       </span>
                     </button>
-                    <span className="text-[11px] font-semibold text-[#1a73e8] mt-1 font-['Google_Sans',sans-serif]">
-                      Tap to capture
+                    <span className="text-[11px] font-bold text-[#4285F4] mt-1 font-['Google_Sans',sans-serif]">
+                      Capture
                     </span>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setActiveTab('inventory')}
-                    className="min-h-[56px] min-w-[56px] h-14 w-14 rounded-[16px] bg-white hover:bg-[#e8f0fe] active:bg-[#d2e3fc] border border-[#e2e8f0] flex flex-col items-center justify-center text-[#5a6675] hover:text-[#1a73e8] transition-all m3-elevation-1 relative cursor-pointer"
+                    className={`min-h-[56px] min-w-[56px] h-14 w-14 rounded-[20px] flex flex-col items-center justify-center transition-all relative cursor-pointer border ${
+                      isDark
+                        ? 'bg-white/[0.05] border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.1]'
+                        : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                    }`}
                     title="View Inventory"
                   >
                     <Package className="w-5 h-5" />
-                    <span className="text-[9px] font-medium mt-0.5">Inventory</span>
+                    <span className="text-[9px] font-semibold mt-0.5">Inventory</span>
                     {materials.length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-[#1a73e8] text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                      <span className="absolute -top-1 -right-1 ai-rainbow-gradient text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md">
                         {materials.length}
                       </span>
                     )}
@@ -606,144 +793,121 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW B: SHARED-ELEMENT MORPHING CANVAS (PREVIEW → EXTRACTING → EXTRACTED) */}
+            {/* ========================================================= */}
+            {/* VIEW B: SIGNATURE TWO-SIDED 3D CARD FLIP (FRONT & BACK)   */}
+            {/* ========================================================= */}
             {!isCameraActive && capturedPhoto && (
-              <div className="flex-1 flex flex-col justify-between bg-[#f4f6f9] h-full overflow-hidden">
-                {/* Clean White Top App Bar */}
-                <header className="h-16 px-4 flex items-center justify-between bg-white border-b border-[#e2e8f0] z-10 flex-shrink-0">
+              <div className="flex-1 flex flex-col justify-between h-full overflow-hidden">
+                <header
+                  className={`h-14 px-4 flex items-center justify-between border-b flex-shrink-0 transition-colors ${
+                    isDark ? 'bg-[#10131b]/60 border-white/10' : 'bg-white/60 border-slate-200'
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => {
                         setIsCameraActive(true);
-                        setReviewStage('preview');
+                        setIsCardFlipped(false);
                       }}
-                      className="w-10 h-10 rounded-full hover:bg-[#f4f6f9] flex items-center justify-center text-[#5a6675] cursor-pointer"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                       aria-label="Back to camera"
                     >
                       <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div>
-                      <h1 className="text-xl font-bold tracking-tight text-[#1f2733] font-['Google_Sans',sans-serif]">
-                        {reviewStage === 'preview'
-                          ? 'Preview'
-                          : reviewStage === 'extracting'
-                          ? 'Extracting Material...'
-                          : 'Material Result'}
-                      </h1>
-                      <p className="text-xs text-[#5a6675]">
-                        {reviewStage === 'preview'
-                          ? 'Review captured photo'
-                          : reviewStage === 'extracting'
-                          ? 'Gemini reading details & writing Firestore'
-                          : 'Saved to Firestore collection "materials"'}
+                      <h2 className="text-sm font-bold tracking-tight font-['Google_Sans',sans-serif]">
+                        {isCardFlipped ? 'Extracted Material Result' : 'Captured Photo Preview'}
+                      </h2>
+                      <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {isCardFlipped
+                          ? 'Back face: Firestore & Gemini data'
+                          : 'Front face: Ready to flip 3D on Use photo'}
                       </p>
                     </div>
                   </div>
 
-                  {reviewStage === 'preview' && (
+                  {!isCardFlipped && (
                     <button
                       type="button"
                       onClick={() => setRotation((prev) => (prev + 90) % 360)}
-                      className="w-10 h-10 rounded-full hover:bg-[#f4f6f9] flex items-center justify-center text-[#5a6675] cursor-pointer"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                       title="Rotate 90°"
                     >
                       <RotateCw className="w-4 h-4" />
                     </button>
                   )}
-
-                  {reviewStage === 'extracted' && (
-                    <span className="w-8 h-8 rounded-full bg-[#e6f4ea] text-[#188038] flex items-center justify-center">
-                      <Check className="w-4 h-4 stroke-[3]" />
-                    </span>
-                  )}
                 </header>
 
-                {/* ------------------------------------------------------------- */}
-                {/* HERO SHARED-ELEMENT MORPHING CONTAINER                        */}
-                {/* ------------------------------------------------------------- */}
-                <div className="flex-1 px-4 py-3 flex flex-col items-center justify-start overflow-y-auto">
-                  {/* The Master Morphing Card: White surface, 16px corners, soft elevation */}
+                {/* 3D FLIP CONTAINER (perspective ~1200px) */}
+                <div className="flex-1 px-4 py-3 flex flex-col items-center justify-center overflow-y-auto perspective-1200">
                   <div
-                    className={`w-full bg-white rounded-[16px] border border-[#e2e8f0] overflow-hidden m3-morph-transition ${
-                      reviewStage === 'preview'
-                        ? 'p-2.5 m3-elevation-2'
-                        : reviewStage === 'extracting'
-                        ? 'p-3 shadow-[0_12px_28px_rgba(26,115,232,0.16)]'
-                        : 'p-3.5 m3-elevation-2'
+                    className={`relative w-full max-w-[390px] h-[460px] rounded-[28px] card-flip-flipper ${
+                      isCardFlipped ? 'is-flipped' : ''
                     }`}
                   >
-                    {/* HERO ELEMENT: The Captured Photo that smoothly shrinks and morphs into top of card */}
+                    {/* SHEEN HIGHLIGHT OVERLAY (Diagonal sheen sweep during flip) */}
+                    {isSheenActive && (
+                      <div className="absolute inset-0 z-50 pointer-events-none rounded-[28px] overflow-hidden">
+                        <div
+                          className="w-[200%] h-[200%] halo-sheen-active"
+                          style={{
+                            background:
+                              'linear-gradient(110deg, transparent 20%, rgba(255,255,255,0.7) 48%, rgba(66,133,244,0.5) 52%, transparent 75%)',
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* ------------------------------------------------------- */}
+                    {/* FRONT FACE OF CARD: THE CAPTURED PHOTO                   */}
+                    {/* ------------------------------------------------------- */}
                     <div
-                      className={`relative w-full rounded-[12px] overflow-hidden bg-black/5 m3-morph-transition flex items-center justify-center ${
-                        reviewStage === 'preview'
-                          ? 'h-[320px] shadow-inner'
-                          : reviewStage === 'extracting'
-                          ? 'h-24 shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
-                          : 'h-24 shadow-sm'
+                      className={`card-face-front rounded-[28px] overflow-hidden border p-3 flex flex-col justify-between shadow-[0_20px_50px_rgba(0,0,0,0.5)] ${
+                        isDark
+                          ? 'bg-[#121622]/90 border-white/15 backdrop-blur-2xl'
+                          : 'bg-white/95 border-slate-200 backdrop-blur-2xl'
                       }`}
                     >
-                      <img
-                        src={capturedPhoto.dataUrl}
-                        alt="Captured material scan"
-                        style={{ transform: `rotate(${rotation}deg)` }}
-                        className="w-full h-full object-cover transition-all duration-300"
-                      />
+                      <div className="relative w-full h-[320px] rounded-[20px] overflow-hidden bg-black/40 shadow-inner">
+                        <img
+                          src={capturedPhoto.dataUrl}
+                          alt="Captured photo front"
+                          style={{ transform: `rotate(${rotation}deg)` }}
+                          className="w-full h-full object-cover"
+                        />
 
-                      {/* Photo Badge in Preview Stage */}
-                      {reviewStage === 'preview' && (
-                        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-[11px] px-3 py-1 rounded-full flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-[#1a73e8]"></span>
+                        {/* Glossy Front Details Pill */}
+                        <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md text-white text-[11px] font-semibold px-3 py-1 rounded-full border border-white/20 flex items-center gap-2 shadow-lg">
+                          <span className="w-2 h-2 rounded-full bg-[#4285F4] animate-pulse"></span>
                           <span>{capturedPhoto.sizeFormatted}</span>
+                          <span className="text-white/40">•</span>
+                          <span>Front Face</span>
                         </div>
-                      )}
+                      </div>
 
-                      {/* Laser Shimmer Overlay during extraction move */}
-                      {reviewStage === 'extracting' && (
-                        <div className="absolute inset-0 bg-[#1a73e8]/10 backdrop-blur-[0.5px] flex items-center justify-center">
-                          <div className="px-3 py-1 rounded-full bg-black/70 text-white text-[10px] font-medium flex items-center gap-1.5 shadow-md">
-                            <RefreshCw className="w-3 h-3 text-[#8ab4f8] animate-spin" />
-                            <span>Gemini analyzing...</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Status Stamp Chip in Extracted Stage (Stamps in with soft scale-bounce!) */}
-                      {reviewStage === 'extracted' && (
-                        <div className="absolute top-2.5 right-2.5 m3-stamp-chip">
-                          <span className="flex items-center gap-1.5 px-3 py-1 rounded-[16px] text-xs font-bold bg-[#e6f4ea] text-[#188038] border border-[#ceead6] shadow-md">
-                            <span className="w-2 h-2 rounded-full bg-[#188038]"></span>
-                            <span>ok</span>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ----------------------------------------------------------- */}
-                    {/* STAGE A: PREVIEW CONTROLS (Beneath large photo)              */}
-                    {/* ----------------------------------------------------------- */}
-                    {reviewStage === 'preview' && (
-                      <div className="mt-3 space-y-2.5">
-                        <div className="p-3 bg-[#f4f6f9] rounded-[14px] border border-[#e2e8f0] flex items-center justify-between text-xs">
-                          <span className="font-semibold text-[#1f2733] flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-[#1a73e8]" />
-                            Shelf Life:
-                          </span>
-                          <span className="text-[#1a73e8] font-bold text-xs bg-[#e8f0fe] px-2.5 py-0.5 rounded-full">
-                            {shelfLifeDays} days
-                          </span>
-                        </div>
-
-                        <div className="flex gap-2">
-                          {[30, 60, 90, 180, 365].map((days) => (
+                      {/* Shelf life selector */}
+                      <div
+                        className={`p-2.5 rounded-[18px] border flex items-center justify-between text-xs mt-2 ${
+                          isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <span className="font-semibold flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-[#4285F4]" />
+                          Shelf Life:
+                        </span>
+                        <div className="flex gap-1.5">
+                          {[30, 90, 180].map((days) => (
                             <button
                               key={days}
                               type="button"
                               onClick={() => setShelfLifeDays(days)}
-                              className={`flex-1 py-1.5 rounded-[12px] text-xs font-semibold transition-colors cursor-pointer ${
+                              className={`px-2.5 py-1 rounded-[12px] text-[11px] font-bold transition-all cursor-pointer ${
                                 shelfLifeDays === days
-                                  ? 'bg-[#1a73e8] text-white shadow-sm'
-                                  : 'bg-[#f4f6f9] text-[#5a6675] hover:bg-[#e8f0fe] border border-[#e2e8f0]'
+                                  ? 'ai-rainbow-gradient text-white shadow-sm'
+                                  : isDark
+                                  ? 'bg-white/[0.06] text-slate-400'
+                                  : 'bg-white text-slate-600 border border-slate-200'
                               }`}
                             >
                               {days}d
@@ -751,165 +915,223 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    {/* ----------------------------------------------------------- */}
-                    {/* STAGE B: SKELETON SHIMMER (While Gemini reads)              */}
-                    {/* ----------------------------------------------------------- */}
-                    {reviewStage === 'extracting' && (
-                      <div className="mt-3.5 space-y-3">
-                        {/* Shimmer header */}
-                        <div className="space-y-1.5">
-                          <div className="h-3.5 w-24 rounded-[6px] m3-shimmer-bar"></div>
-                          <div className="h-5 w-3/4 rounded-[8px] m3-shimmer-bar"></div>
+                    {/* ------------------------------------------------------- */}
+                    {/* BACK FACE OF CARD: EXTRACTED DATA RESULT CARD            */}
+                    {/* ------------------------------------------------------- */}
+                    <div
+                      className={`card-face-back rounded-[28px] overflow-hidden border p-4 flex flex-col justify-between shadow-[0_20px_50px_rgba(0,0,0,0.6)] ${
+                        isDark
+                          ? 'bg-[#121622]/95 border-white/15 backdrop-blur-2xl text-white'
+                          : 'bg-white/95 border-slate-200 backdrop-blur-2xl text-[#1f2733]'
+                      }`}
+                    >
+                      {/* Top banner of back face: Morph thumbnail + Status chip */}
+                      <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={capturedPhoto.dataUrl}
+                            alt="Morphed scan thumb"
+                            className="w-12 h-12 rounded-[14px] object-cover border border-white/20 shadow-md"
+                          />
+                          <div>
+                            <span className="text-[10px] uppercase font-bold tracking-wider ai-rainbow-text">
+                              Gemini 3.8 Flash Vision
+                            </span>
+                            <h3 className="text-xs font-bold leading-tight line-clamp-1">
+                              {extractedData?.name || 'Reading label...'}
+                            </h3>
+                          </div>
                         </div>
 
-                        {/* Shimmer chips */}
-                        <div className="flex gap-2">
-                          <div className="h-6 w-28 rounded-[16px] m3-shimmer-bar"></div>
-                          <div className="h-6 w-20 rounded-[16px] m3-shimmer-bar"></div>
-                        </div>
-
-                        {/* Shimmer grid */}
-                        <div className="grid grid-cols-2 gap-2 pt-1">
-                          <div className="h-12 rounded-[12px] m3-shimmer-bar"></div>
-                          <div className="h-12 rounded-[12px] m3-shimmer-bar"></div>
-                          <div className="h-12 rounded-[12px] m3-shimmer-bar"></div>
-                          <div className="h-12 rounded-[12px] m3-shimmer-bar"></div>
-                        </div>
-
-                        {/* Shimmer status bar */}
-                        <div className="h-3 w-full rounded-full m3-shimmer-bar mt-2"></div>
+                        {/* STAMP BOUNCE STATUS CHIP (stamps in after flip!) */}
+                        {!isGeminiLoading && extractedData?.name !== 'No label detected' && (
+                          <div className="stamp-bounce-in">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-[#34A853]/15 text-[#34A853] border border-[#34A853]/40 shadow-md">
+                              <span className="w-2 h-2 rounded-full bg-[#34A853]"></span>
+                              <span>ok</span>
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
 
-                    {/* ----------------------------------------------------------- */}
-                    {/* STAGE C: EXTRACTED FIELDS (Cascade in one-by-one below)      */}
-                    {/* ----------------------------------------------------------- */}
-                    {reviewStage === 'extracted' && extractedData && (
-                      <div className="mt-3 space-y-2.5">
-                        {/* Field Cascade 1: Category chip & Item Title */}
-                        <div className="m3-cascade-1">
-                          <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a73e8] bg-[#e8f0fe] px-2.5 py-0.5 rounded-full mb-1">
-                            <Tag className="w-3 h-3" />
-                            {extractedData.category}
+                      {/* Content Area of Back Face */}
+                      <div className="flex-1 py-3 flex flex-col justify-center overflow-y-auto">
+                        {isGeminiLoading ? (
+                          /* Skeleton shimmer while reading */
+                          <div className="space-y-3">
+                            <div className="h-4 w-28 rounded-[8px] bg-white/10 skeleton-shimmer-sweep relative overflow-hidden" />
+                            <div className="h-7 w-3/4 rounded-[12px] bg-white/10 skeleton-shimmer-sweep relative overflow-hidden" />
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <div className="h-14 rounded-[16px] bg-white/10 skeleton-shimmer-sweep relative overflow-hidden" />
+                              <div className="h-14 rounded-[16px] bg-white/10 skeleton-shimmer-sweep relative overflow-hidden" />
+                            </div>
+                            <div className="h-10 rounded-[14px] bg-white/10 skeleton-shimmer-sweep relative overflow-hidden" />
                           </div>
-                          <h3 className="text-base font-bold text-[#1f2733] leading-snug truncate font-['Google_Sans',sans-serif]">
-                            {extractedData.name}
-                          </h3>
-                        </div>
-
-                        {/* Field Cascade 2: Batch Number & Quantity */}
-                        <div className="grid grid-cols-2 gap-2 m3-cascade-2 pt-0.5">
-                          <div className="bg-[#f4f6f9] p-2.5 rounded-[12px] border border-[#e2e8f0]">
-                            <span className="text-[10px] text-[#5a6675] flex items-center gap-1">
-                              <Hash className="w-3 h-3 text-[#1a73e8]" /> Batch #:
-                            </span>
-                            <span className="font-bold text-xs text-[#1f2733] truncate block mt-0.5">
-                              {extractedData.batchNo}
-                            </span>
+                        ) : extractedData?.name === 'No label detected' ? (
+                          /* No label detected state */
+                          <div className="p-4 rounded-[20px] bg-[#EA4335]/15 border border-[#EA4335]/30 text-center space-y-2 cascade-field-1">
+                            <div className="w-10 h-10 rounded-full bg-[#EA4335]/25 text-[#EA4335] flex items-center justify-center mx-auto">
+                              <AlertTriangle className="w-5 h-5" />
+                            </div>
+                            <h4 className="text-sm font-bold text-[#EA4335]">
+                              No label detected
+                            </h4>
+                            <p className="text-xs text-slate-300">
+                              Image is not recognized as a printed product/material label. Confidence: 0
+                            </p>
                           </div>
+                        ) : (
+                          /* Extracted Data cascading in */
+                          <div className="space-y-2.5">
+                            {/* Cascade 1: Category & Name */}
+                            <div className="cascade-field-1">
+                              {extractedData?.category && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full ai-rainbow-gradient text-white shadow-sm mb-1">
+                                  <Tag className="w-3 h-3" />
+                                  {extractedData.category}
+                                </span>
+                              )}
+                              <h3 className="text-base font-extrabold leading-snug line-clamp-2">
+                                {extractedData?.name}
+                              </h3>
+                            </div>
 
-                          <div className="bg-[#f4f6f9] p-2.5 rounded-[12px] border border-[#e2e8f0]">
-                            <span className="text-[10px] text-[#5a6675] flex items-center gap-1">
-                              <Layers className="w-3 h-3 text-[#1a73e8]" /> Quantity:
-                            </span>
-                            <span className="font-bold text-xs text-[#1a73e8] truncate block mt-0.5">
-                              {extractedData.quantity} {extractedData.unit}
-                            </span>
+                            {/* Cascade 2: Batch & Quantity */}
+                            <div className="grid grid-cols-2 gap-2 cascade-field-2">
+                              <div
+                                className={`p-2.5 rounded-[16px] border ${
+                                  isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
+                                  <Hash className="w-3 h-3 text-[#4285F4]" /> Batch / LOT:
+                                </span>
+                                <span className="text-xs font-bold block truncate mt-0.5">
+                                  {extractedData?.batchNo || '—'}
+                                </span>
+                              </div>
+
+                              <div
+                                className={`p-2.5 rounded-[16px] border ${
+                                  isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+                                }`}
+                              >
+                                <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
+                                  <Layers className="w-3 h-3 text-[#34A853]" /> Quantity:
+                                </span>
+                                <span className="text-xs font-bold text-[#4285F4] block truncate mt-0.5">
+                                  {extractedData?.quantity !== null
+                                    ? `${extractedData?.quantity} ${extractedData?.unit || ''}`.trim()
+                                    : '—'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Cascade 3: Dates */}
+                            <div
+                              className={`p-2.5 rounded-[16px] border space-y-1.5 text-xs cascade-field-3 ${
+                                isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center text-[11px]">
+                                <span className="text-slate-400 flex items-center gap-1">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400" /> Purchased:
+                                </span>
+                                <span className="font-semibold">{extractedData?.purchaseDate || '—'}</span>
+                              </div>
+
+                              {extractedData?.purchaseDate && (
+                                <div className="flex justify-between items-center pt-1 border-t border-white/10 text-[11px]">
+                                  <span className="text-slate-400 flex items-center gap-1 font-medium">
+                                    <Clock className="w-3.5 h-3.5 text-[#4285F4]" /> Expires:
+                                  </span>
+                                  <span className="font-extrabold text-[#34A853] bg-[#34A853]/15 px-2 py-0.5 rounded-[8px] border border-[#34A853]/30">
+                                    {calculateExpiryDate(extractedData?.purchaseDate, shelfLifeDays) || '—'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Cascade 4: Verification Score */}
+                            <div className="cascade-field-4 p-2 rounded-[14px] bg-[#4285F4]/15 border border-[#4285F4]/30 flex items-center justify-between text-xs">
+                              <span className="text-[#4285F4] font-semibold flex items-center gap-1.5">
+                                <ShieldCheck className="w-4 h-4" />
+                                Label Verified
+                              </span>
+                              <span className="text-xs font-bold text-[#4285F4]">
+                                Confidence: {((extractedData?.confidence || 0) * 100).toFixed(0)}%
+                              </span>
+                            </div>
                           </div>
-                        </div>
-
-                        {/* Field Cascade 3: Dates */}
-                        <div className="bg-[#f4f6f9] p-2.5 rounded-[12px] border border-[#e2e8f0] space-y-1.5 text-xs m3-cascade-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[#5a6675] flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5 text-[#5a6675]" /> Purchase Date:
-                            </span>
-                            <span className="font-semibold text-[#1f2733]">{extractedData.purchaseDate}</span>
-                          </div>
-
-                          <div className="flex justify-between items-center pt-1 border-t border-[#e2e8f0]">
-                            <span className="text-[#5a6675] flex items-center gap-1 font-medium text-[#1a73e8]">
-                              <Clock className="w-3.5 h-3.5" /> Expiry Date:
-                            </span>
-                            <span className="font-bold text-[#188038] bg-[#e6f4ea] px-2 py-0.5 rounded-[6px] border border-[#ceead6]">
-                              {calculateExpiryDate(extractedData.purchaseDate, shelfLifeDays)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Field Cascade 4: Verification status indicator */}
-                        <div className="p-2.5 bg-[#e8f0fe] rounded-[12px] border border-[#d2e3fc] flex items-center justify-between m3-cascade-4 text-xs">
-                          <span className="text-[#1a73e8] font-semibold flex items-center gap-1.5">
-                            <ShieldCheck className="w-4 h-4" />
-                            Verified with Gemini AI
-                          </span>
-                          <span className="text-xs font-bold text-[#1a73e8]">
-                            {(extractedData.confidence * 100).toFixed(0)}% score
-                          </span>
-                        </div>
+                        )}
                       </div>
-                    )}
+
+                      {/* Back Card Bottom Actions */}
+                      <div className="pt-2 border-t border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('inventory')}
+                          className="w-full h-11 rounded-[16px] ai-rainbow-gradient text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-transform cursor-pointer"
+                        >
+                          <Package className="w-4 h-4" />
+                          <span>View in Inventory</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* ------------------------------------------------------------- */}
-                {/* BOTTOM ACTION BAR (MORPHS BASED ON STAGE)                     */}
-                {/* ------------------------------------------------------------- */}
-                <div className="bg-white border-t border-[#e2e8f0] px-4 py-4 m3-elevation-3 rounded-t-[20px] flex-shrink-0">
-                  {reviewStage === 'preview' && (
+                {/* BOTTOM ACTION BAR */}
+                <div
+                  className={`px-4 py-4 border-t flex-shrink-0 transition-colors ${
+                    isDark ? 'bg-[#10131b]/95 border-white/10' : 'bg-white/95 border-slate-200'
+                  }`}
+                >
+                  {!isCardFlipped ? (
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         type="button"
                         onClick={handleRetake}
-                        className="min-h-[56px] h-14 w-full rounded-[16px] bg-white hover:bg-[#f4f6f9] active:bg-[#e2e8f0] text-[#1a73e8] border-2 border-[#1a73e8] font-['Google_Sans',sans-serif] font-medium text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] m3-elevation-1 cursor-pointer"
+                        className={`min-h-[56px] h-14 w-full rounded-[20px] font-semibold text-xs flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                          isDark
+                            ? 'bg-white/[0.05] border-white/15 text-slate-200 hover:bg-white/10'
+                            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                        }`}
                       >
-                        <RotateCcw className="w-5 h-5 text-[#1a73e8]" />
+                        <RotateCcw className="w-4 h-4" />
                         <span>Retake</span>
                       </button>
 
+                      {/* "Use photo" button with signature rainbow gradient & 3D flip trigger */}
                       <button
                         type="button"
                         onClick={handleUsePhoto}
-                        className="min-h-[56px] h-14 w-full rounded-[16px] bg-[#1a73e8] hover:bg-[#1557b0] active:bg-[#174ea6] text-white font-['Google_Sans',sans-serif] font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] m3-elevation-2 hover:m3-elevation-3 cursor-pointer shadow-[0_2px_4px_rgba(26,115,232,0.3)]"
+                        className="min-h-[56px] h-14 w-full rounded-[20px] ai-rainbow-gradient ai-rainbow-gradient-hover text-white font-['Google_Sans',sans-serif] font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-[0_4px_24px_rgba(66,133,244,0.4)] cursor-pointer"
                       >
                         <Check className="w-5 h-5 stroke-[2.5]" />
-                        <span>Use photo</span>
+                        <span>Use photo (3D Flip)</span>
                       </button>
                     </div>
-                  )}
-
-                  {reviewStage === 'extracting' && (
-                    <div className="min-h-[56px] h-14 w-full rounded-[16px] bg-[#f4f6f9] border border-[#e2e8f0] flex items-center justify-center text-xs text-[#5a6675] font-medium gap-2">
-                      <RefreshCw className="w-4 h-4 animate-spin text-[#1a73e8]" />
-                      <span>Reading photo & saving to Firestore...</span>
-                    </div>
-                  )}
-
-                  {reviewStage === 'extracted' && (
-                    <div className="space-y-2 m3-cascade-5">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('inventory')}
-                        className="min-h-[56px] h-14 w-full rounded-[16px] bg-[#1a73e8] hover:bg-[#1557b0] active:bg-[#174ea6] text-white font-['Google_Sans',sans-serif] font-semibold text-sm flex items-center justify-center gap-2 m3-elevation-2 transition-all cursor-pointer shadow-[0_2px_4px_rgba(26,115,232,0.3)]"
-                      >
-                        <Package className="w-5 h-5" />
-                        <span>View in Inventory Screen</span>
-                        <ArrowRight className="w-4 h-4 ml-1" />
-                      </button>
-
+                  ) : (
+                    <div className="space-y-2">
                       <button
                         type="button"
                         onClick={() => {
                           setCapturedPhoto(null);
                           setExtractedData(null);
                           setIsCameraActive(true);
-                          setReviewStage('preview');
+                          setIsCardFlipped(false);
                         }}
-                        className="min-h-[56px] h-14 w-full rounded-[16px] bg-white hover:bg-[#e8f0fe] text-[#1a73e8] border border-[#e2e8f0] font-['Google_Sans',sans-serif] font-medium text-sm flex items-center justify-center gap-2 transition-all cursor-pointer m3-elevation-1"
+                        className={`min-h-[56px] h-14 w-full rounded-[20px] font-bold text-xs flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                          isDark
+                            ? 'bg-white/[0.06] border-white/15 text-white hover:bg-white/10'
+                            : 'bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200'
+                        }`}
                       >
-                        <ScanLine className="w-5 h-5" />
+                        <ScanLine className="w-4 h-4 text-[#4285F4]" />
                         <span>Scan Another Material</span>
                       </button>
                     </div>
@@ -924,52 +1146,31 @@ export default function App() {
         {/* TAB 2: INVENTORY SCREEN                                       */}
         {/* ============================================================= */}
         {activeTab === 'inventory' && (
-          <div className="flex-1 flex flex-col justify-between bg-[#f4f6f9] h-full overflow-hidden">
-            <header className="h-16 px-4 flex items-center justify-between bg-white border-b border-[#e2e8f0] z-10 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#e8f0fe] flex items-center justify-center text-[#1a73e8]">
-                  <Package className="w-5 h-5" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold tracking-tight text-[#1f2733] font-['Google_Sans',sans-serif]">
-                    Inventory
-                  </h1>
-                  <p className="text-xs text-[#5a6675]">
-                    Firestore collection "materials" ({materials.length})
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('scan');
-                  setIsCameraActive(true);
-                  setReviewStage('preview');
-                }}
-                className="h-10 px-3.5 rounded-[16px] bg-[#1a73e8] hover:bg-[#1557b0] text-white text-xs font-semibold flex items-center gap-1.5 m3-elevation-1 transition-all active:scale-95 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Scan New</span>
-              </button>
-            </header>
-
-            {/* Search Field on Top */}
-            <div className="px-4 pt-3 pb-2.5 bg-white border-b border-[#e2e8f0] flex-shrink-0">
+          <div className="flex-1 flex flex-col justify-between h-full overflow-hidden">
+            {/* Search Field on Top: Frosted Glass */}
+            <div
+              className={`px-4 pt-3 pb-2.5 border-b flex-shrink-0 transition-colors ${
+                isDark ? 'bg-black/20 border-white/10' : 'bg-slate-50/60 border-slate-200'
+              }`}
+            >
               <div className="relative flex items-center">
-                <Search className="w-5 h-5 text-[#5a6675] absolute left-3.5 pointer-events-none" />
+                <Search className="w-5 h-5 text-slate-400 absolute left-3.5 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search materials, batch #, category..."
-                  className="w-full h-12 pl-11 pr-10 bg-[#f4f6f9] focus:bg-white rounded-[16px] text-sm text-[#1f2733] placeholder-[#5a6675] border border-transparent focus:border-[#1a73e8] focus:outline-none transition-all m3-elevation-1"
+                  className={`w-full h-12 pl-11 pr-10 rounded-[20px] text-sm placeholder-slate-400 border transition-all ${
+                    isDark
+                      ? 'bg-white/[0.06] border-white/10 focus:border-[#4285F4] focus:bg-[#161a26] text-white'
+                      : 'bg-white border-slate-200 focus:border-[#4285F4] text-slate-900'
+                  }`}
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="w-8 h-8 rounded-full hover:bg-black/5 absolute right-2 flex items-center justify-center text-[#5a6675]"
+                    className="w-8 h-8 rounded-full hover:bg-white/10 absolute right-2 flex items-center justify-center text-slate-400"
                     aria-label="Clear search"
                   >
                     <X className="w-4 h-4" />
@@ -977,78 +1178,85 @@ export default function App() {
                 )}
               </div>
 
-              {/* Status Filter Chips: strict status colors */}
+              {/* Status Filter Chips: Green #34A853, Amber #FBBC04, Red #EA4335 */}
               <div className="flex items-center gap-1.5 mt-2.5 overflow-x-auto pb-1 no-scrollbar text-xs">
                 <button
                   type="button"
                   onClick={() => setStatusFilter('all')}
-                  className={`h-8 px-3 rounded-[16px] font-medium transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`h-8 px-3 rounded-[16px] font-bold transition-all flex items-center gap-1 cursor-pointer border ${
                     statusFilter === 'all'
-                      ? 'bg-[#1a73e8] text-white font-semibold m3-elevation-1'
-                      : 'bg-white text-[#5a6675] border border-[#e2e8f0] hover:bg-[#f4f6f9]'
+                      ? 'ai-rainbow-gradient text-white border-transparent shadow-md'
+                      : isDark
+                      ? 'bg-white/[0.05] border-white/10 text-slate-300 hover:bg-white/10'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   All ({statusCounts.all})
                 </button>
 
+                {/* OK: #34A853 */}
                 <button
                   type="button"
                   onClick={() => setStatusFilter('ok')}
-                  className={`h-8 px-3 rounded-[16px] font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`h-8 px-3 rounded-[16px] font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
                     statusFilter === 'ok'
-                      ? 'bg-[#188038] text-white font-semibold m3-elevation-1'
-                      : 'bg-white text-[#188038] border border-[#ceead6] hover:bg-[#e6f4ea]'
+                      ? 'bg-[#34A853] text-white border-transparent shadow-md'
+                      : 'bg-[#34A853]/10 text-[#34A853] border-[#34A853]/30 hover:bg-[#34A853]/20'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${statusFilter === 'ok' ? 'bg-white' : 'bg-[#188038]'}`}></span>
+                  <span className={`w-2 h-2 rounded-full ${statusFilter === 'ok' ? 'bg-white' : 'bg-[#34A853]'}`} />
                   <span>OK ({statusCounts.ok})</span>
                 </button>
 
+                {/* Expiring: #FBBC04 / #f29900 */}
                 <button
                   type="button"
                   onClick={() => setStatusFilter('expiring')}
-                  className={`h-8 px-3 rounded-[16px] font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`h-8 px-3 rounded-[16px] font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
                     statusFilter === 'expiring'
-                      ? 'bg-[#b06000] text-white font-semibold m3-elevation-1'
-                      : 'bg-white text-[#b06000] border border-[#feefc3] hover:bg-[#fef7e0]'
+                      ? 'bg-[#f29900] text-white border-transparent shadow-md'
+                      : 'bg-[#f29900]/10 text-[#f29900] border-[#f29900]/30 hover:bg-[#f29900]/20'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${statusFilter === 'expiring' ? 'bg-white' : 'bg-[#b06000]'}`}></span>
+                  <span className={`w-2 h-2 rounded-full ${statusFilter === 'expiring' ? 'bg-white' : 'bg-[#f29900]'}`} />
                   <span>Expiring ({statusCounts.expiring})</span>
                 </button>
 
+                {/* Expired: #EA4335 */}
                 <button
                   type="button"
                   onClick={() => setStatusFilter('expired')}
-                  className={`h-8 px-3 rounded-[16px] font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`h-8 px-3 rounded-[16px] font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
                     statusFilter === 'expired'
-                      ? 'bg-[#c5221f] text-white font-semibold m3-elevation-1'
-                      : 'bg-white text-[#c5221f] border border-[#fad2cf] hover:bg-[#fce8e6]'
+                      ? 'bg-[#EA4335] text-white border-transparent shadow-md'
+                      : 'bg-[#EA4335]/10 text-[#EA4335] border-[#EA4335]/30 hover:bg-[#EA4335]/20'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${statusFilter === 'expired' ? 'bg-white' : 'bg-[#c5221f]'}`}></span>
+                  <span className={`w-2 h-2 rounded-full ${statusFilter === 'expired' ? 'bg-white' : 'bg-[#EA4335]'}`} />
                   <span>Expired ({statusCounts.expired})</span>
                 </button>
               </div>
             </div>
 
-            {/* Material Cards List from Firestore */}
-            <div className="flex-1 px-4 py-3 overflow-y-auto space-y-3 bg-[#f4f6f9]">
+            {/* Material Cards List: Frosted Glass floating panels */}
+            <div className="flex-1 px-4 py-3 overflow-y-auto space-y-3">
               {isLoadingMaterials && (
                 <div className="space-y-3 pt-2">
                   {[1, 2, 3].map((n) => (
                     <div
                       key={n}
-                      className="p-4 bg-white rounded-[16px] border border-[#e2e8f0] space-y-2.5 animate-pulse m3-elevation-1"
+                      className={`p-4 rounded-[20px] border space-y-2.5 animate-pulse ${
+                        isDark ? 'bg-white/[0.04] border-white/10' : 'bg-white border-slate-200'
+                      }`}
                     >
                       <div className="flex justify-between items-start">
-                        <div className="h-5 w-48 bg-[#e2e8f0] rounded-[6px]"></div>
-                        <div className="h-6 w-16 bg-[#e2e8f0] rounded-full"></div>
+                        <div className="h-5 w-44 rounded-[8px] bg-white/10" />
+                        <div className="h-6 w-16 rounded-full bg-white/10" />
                       </div>
-                      <div className="h-3 w-32 bg-[#e2e8f0] rounded-[4px]"></div>
+                      <div className="h-3 w-28 rounded-[6px] bg-white/10" />
                       <div className="flex justify-between pt-1">
-                        <div className="h-3 w-20 bg-[#e2e8f0] rounded-[4px]"></div>
-                        <div className="h-3 w-24 bg-[#e2e8f0] rounded-[4px]"></div>
+                        <div className="h-3 w-20 rounded-[6px] bg-white/10" />
+                        <div className="h-3 w-24 rounded-[6px] bg-white/10" />
                       </div>
                     </div>
                   ))}
@@ -1056,17 +1264,27 @@ export default function App() {
               )}
 
               {!isLoadingMaterials && filteredMaterials.length === 0 && (
-                <div className="text-center py-12 px-4 bg-white rounded-[16px] border border-[#e2e8f0] m3-elevation-1 my-4">
-                  <div className="w-16 h-16 rounded-full bg-[#e8f0fe] text-[#1a73e8] flex items-center justify-center mx-auto mb-3">
-                    <Package className="w-8 h-8" />
+                <div
+                  className={`text-center py-12 px-4 rounded-[24px] border my-4 shadow-xl ${
+                    isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white/80 border-slate-200'
+                  }`}
+                >
+                  <div className="w-16 h-16 rounded-full ai-rainbow-gradient p-[2px] mx-auto mb-3 shadow-lg">
+                    <div
+                      className={`w-full h-full rounded-full flex items-center justify-center ${
+                        isDark ? 'bg-[#0f121a]' : 'bg-white'
+                      }`}
+                    >
+                      <Package className="w-7 h-7 text-[#4285F4]" />
+                    </div>
                   </div>
-                  <h3 className="text-base font-bold text-[#1f2733] mb-1 font-['Google_Sans',sans-serif]">
-                    {searchQuery ? 'No materials match your search' : 'No materials in inventory yet'}
+                  <h3 className="text-base font-bold mb-1 font-['Google_Sans',sans-serif]">
+                    {searchQuery ? 'No materials match search' : 'No materials in inventory yet'}
                   </h3>
-                  <p className="text-xs text-[#5a6675] mb-4 max-w-[260px] mx-auto">
+                  <p className={`text-xs mb-4 max-w-[260px] mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {searchQuery
-                      ? 'Try adjusting your search terms or status filters.'
-                      : 'Scan a material or item label to automatically extract details and save to Firestore.'}
+                      ? 'Try adjusting your search query or filter tags.'
+                      : 'Scan a material or product label to automatically extract and save with Gemini.'}
                   </p>
 
                   <div className="flex flex-col gap-2 max-w-[240px] mx-auto">
@@ -1075,24 +1293,28 @@ export default function App() {
                       onClick={() => {
                         setActiveTab('scan');
                         setIsCameraActive(true);
-                        setReviewStage('preview');
+                        setIsCardFlipped(false);
                       }}
-                      className="h-12 w-full rounded-[16px] bg-[#1a73e8] hover:bg-[#1557b0] text-white text-xs font-semibold flex items-center justify-center gap-2 m3-elevation-1 cursor-pointer"
+                      className="h-12 w-full rounded-[20px] ai-rainbow-gradient text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                     >
                       <Camera className="w-4 h-4" />
-                      <span>Scan Your First Material</span>
+                      <span>Scan First Material</span>
                     </button>
 
                     {!searchQuery && (
                       <button
                         type="button"
                         onClick={() => {
-                          SAMPLE_PHOTOS.forEach((s) => {
+                          SAMPLE_PHOTOS.filter((s) => s.mock.name !== 'No label detected').forEach((s) => {
                             saveMaterialToFirestore(s.mock, s.shelfLifeDays);
                           });
                           triggerNotice('Added sample materials to Firestore!');
                         }}
-                        className="h-10 w-full rounded-[16px] bg-white hover:bg-[#e8f0fe] text-[#1a73e8] border border-[#e2e8f0] text-xs font-medium cursor-pointer"
+                        className={`h-10 w-full rounded-[20px] text-xs font-medium border cursor-pointer ${
+                          isDark
+                            ? 'bg-white/[0.04] border-white/10 text-slate-300 hover:bg-white/[0.08]'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
                       >
                         Seed Demo Materials
                       </button>
@@ -1101,85 +1323,111 @@ export default function App() {
                 </div>
               )}
 
-              {/* Material Cards */}
+              {/* Material Cards: Frosted Glass Panels (20px corners, faint glowing border) */}
               {!isLoadingMaterials &&
                 filteredMaterials.map((item) => {
                   const dynamicStatus = computeMaterialStatus(item.expiryDate);
 
-                  let chipClasses = 'bg-[#e6f4ea] text-[#188038] border-[#ceead6]';
+                  let chipClasses = 'bg-[#34A853]/15 text-[#34A853] border-[#34A853]/40';
                   let chipLabel = 'ok';
-                  let chipDot = 'bg-[#188038]';
+                  let chipDot = 'bg-[#34A853]';
 
                   if (dynamicStatus === 'expiring') {
-                    chipClasses = 'bg-[#fef7e0] text-[#b06000] border-[#feefc3]';
+                    chipClasses = 'bg-[#f29900]/15 text-[#f29900] border-[#f29900]/40';
                     chipLabel = 'expiring';
-                    chipDot = 'bg-[#b06000]';
+                    chipDot = 'bg-[#f29900]';
                   } else if (dynamicStatus === 'expired') {
-                    chipClasses = 'bg-[#fce8e6] text-[#c5221f] border-[#fad2cf]';
+                    chipClasses = 'bg-[#EA4335]/15 text-[#EA4335] border-[#EA4335]/40';
                     chipLabel = 'expired';
-                    chipDot = 'bg-[#c5221f]';
+                    chipDot = 'bg-[#EA4335]';
                   }
 
                   return (
                     <div
                       key={item.id}
-                      className="p-4 bg-white rounded-[16px] border border-[#e2e8f0] m3-elevation-1 hover:m3-elevation-2 transition-all space-y-2 relative"
+                      onClick={() => setSelectedMaterialForDetails(item)}
+                      className={`p-4 rounded-[20px] border transition-all space-y-2 relative shadow-lg hover:shadow-xl cursor-pointer ${
+                        isDark
+                          ? 'bg-[#131622]/75 border-white/10 hover:border-[#4285F4]/40 hover:bg-[#151928]'
+                          : 'bg-white/80 border-slate-200 hover:border-[#4285F4]/40 hover:bg-white'
+                      }`}
                     >
+                      {/* Top Row: Name and Status Chip */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-bold text-[#1f2733] leading-snug line-clamp-1 font-['Google_Sans',sans-serif]">
+                          <h3 className="text-sm font-extrabold leading-snug line-clamp-1 font-['Google_Sans',sans-serif]">
                             {item.name}
                           </h3>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[11px] text-[#5a6675] truncate max-w-[160px]">
+                            <span className={`text-[11px] truncate max-w-[160px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                               {item.category || 'Material'}
                             </span>
                           </div>
                         </div>
 
+                        {/* Status Chip */}
                         <div
-                          className={`flex items-center gap-1 px-2.5 py-0.5 rounded-[16px] text-xs font-bold border capitalize ${chipClasses}`}
+                          className={`flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-extrabold border capitalize ${chipClasses}`}
                         >
-                          <span className={`w-2 h-2 rounded-full ${chipDot}`}></span>
+                          <span className={`w-2 h-2 rounded-full ${chipDot}`} />
                           <span>{chipLabel}</span>
                         </div>
                       </div>
 
+                      {/* Middle Attributes: Batch, Quantity */}
                       <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-                        <div className="bg-[#f4f6f9] px-2.5 py-1.5 rounded-[12px] border border-[#e2e8f0]">
-                          <span className="text-[10px] text-[#5a6675] block">Batch #:</span>
-                          <span className="font-semibold text-[#1f2733] truncate block">
-                            {item.batchNo || 'N/A'}
+                        <div
+                          className={`px-3 py-2 rounded-[14px] border ${
+                            isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-50 border-slate-100'
+                          }`}
+                        >
+                          <span className="text-[10px] text-slate-400 block font-medium">Batch / LOT #:</span>
+                          <span className="font-bold truncate block mt-0.5 font-mono text-[#4285F4]">
+                            {item.batchNo ? item.batchNo : '—'}
                           </span>
                         </div>
 
-                        <div className="bg-[#f4f6f9] px-2.5 py-1.5 rounded-[12px] border border-[#e2e8f0]">
-                          <span className="text-[10px] text-[#5a6675] block">Quantity:</span>
-                          <span className="font-bold text-[#1a73e8] block">
-                            {item.quantity} {item.unit || 'pcs'}
+                        <div
+                          className={`px-3 py-2 rounded-[14px] border ${
+                            isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-50 border-slate-100'
+                          }`}
+                        >
+                          <span className="text-[10px] text-slate-400 block font-medium">Quantity:</span>
+                          <span className="font-extrabold text-[#34A853] block mt-0.5">
+                            {item.quantity !== null ? `${item.quantity} ${item.unit || ''}`.trim() : '—'}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1 text-[11px] text-[#5a6675]">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-[#5a6675]" />
-                          Purchased: {item.purchaseDate}
+                      {/* Dates, Batch History Action & Delete */}
+                      <div className="flex items-center justify-between pt-1 text-[11px]">
+                        <span className={`flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          <Calendar className="w-3.5 h-3.5" />
+                          {item.purchaseDate || '—'}
                         </span>
 
-                        <span className="flex items-center gap-1 font-semibold text-[#1f2733]">
-                          <Clock className="w-3.5 h-3.5 text-[#1a73e8]" />
-                          Expires: {item.expiryDate}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMaterialForDetails(item);
+                          }}
+                          className="h-7 px-2.5 rounded-[10px] bg-[#4285F4]/15 hover:bg-[#4285F4]/25 text-[#4285F4] text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-[#4285F4]/30"
+                        >
+                          <History className="w-3 h-3" />
+                          <span>Batch History</span>
+                        </button>
 
                         {item.id && (
                           <button
                             type="button"
-                            onClick={(e) => handleDeleteMaterial(item.id!, e)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteMaterial(item.id!, e);
+                            }}
                             disabled={deletingId === item.id}
-                            className="p-1 rounded-full text-[#5a6675] hover:text-[#c5221f] hover:bg-[#fce8e6] transition-colors cursor-pointer"
+                            className="p-1 rounded-full text-slate-400 hover:text-[#EA4335] hover:bg-[#EA4335]/10 transition-colors cursor-pointer"
                             title="Delete Material"
-                            aria-label="Delete Material"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1190,10 +1438,14 @@ export default function App() {
                 })}
             </div>
 
-            {/* Bottom Bar: Clean White with 16px rounded corners, 56px touch target */}
-            <div className="bg-white border-t border-[#e2e8f0] px-4 py-3 flex items-center justify-between m3-elevation-2 rounded-t-[20px] flex-shrink-0">
-              <div className="text-xs text-[#5a6675]">
-                Showing <span className="font-bold text-[#1f2733]">{filteredMaterials.length}</span> of {materials.length} items
+            {/* Bottom Bar: Frosted Glass */}
+            <div
+              className={`px-4 py-3 flex items-center justify-between border-t flex-shrink-0 transition-colors ${
+                isDark ? 'bg-[#10131b]/95 border-white/10' : 'bg-white/95 border-slate-200'
+              }`}
+            >
+              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                Showing <span className="font-bold">{filteredMaterials.length}</span> of {materials.length} items
               </div>
 
               <button
@@ -1201,9 +1453,9 @@ export default function App() {
                 onClick={() => {
                   setActiveTab('scan');
                   setIsCameraActive(true);
-                  setReviewStage('preview');
+                  setIsCardFlipped(false);
                 }}
-                className="min-h-[56px] h-14 px-5 rounded-[16px] bg-[#1a73e8] hover:bg-[#1557b0] text-white font-['Google_Sans',sans-serif] font-semibold text-xs flex items-center gap-2 m3-elevation-1 active:scale-95 transition-all cursor-pointer"
+                className="min-h-[56px] h-14 px-5 rounded-[20px] ai-rainbow-gradient text-white font-['Google_Sans',sans-serif] font-bold text-xs flex items-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer"
               >
                 <Camera className="w-4 h-4" />
                 <span>Scan Another</span>
@@ -1213,50 +1465,111 @@ export default function App() {
         )}
 
         {/* ============================================================= */}
-        {/* GLOBAL BOTTOM NAVIGATION BAR (MATERIAL 3: CLEAN WHITE)         */}
+        {/* TAB 3: SENPAI VOICE AGENT SCREEN                              */}
         {/* ============================================================= */}
-        <nav className="h-16 bg-white border-t border-[#e2e8f0] flex items-center justify-around px-4 z-20 flex-shrink-0">
+        {activeTab === 'senpai' && (
+          <SenpaiScreen
+            isDark={isDark}
+            materials={materials}
+            currentLang={currentLang}
+            onLanguageChange={setCurrentLang}
+            initialPrompt={senpaiInitialPrompt}
+            onNavigateToScan={(presetItem) => {
+              setActiveTab('scan');
+              setIsCameraActive(true);
+              setIsCardFlipped(false);
+              if (presetItem) triggerNotice(`Targeting material: ${presetItem}`);
+            }}
+            onNavigateToInventory={(filter) => {
+              setActiveTab('inventory');
+              if (filter) setStatusFilter(filter);
+            }}
+          />
+        )}
+
+        {/* ============================================================= */}
+        {/* GLOBAL BOTTOM NAVIGATION (Frosted Glass)                      */}
+        {/* ============================================================= */}
+        <nav
+          className={`h-16 border-t flex items-center justify-around px-4 z-20 flex-shrink-0 transition-colors ${
+            isDark ? 'bg-[#10131b]/95 border-white/10' : 'bg-white/95 border-slate-200'
+          }`}
+        >
           <button
             type="button"
-            onClick={() => {
-              setActiveTab('scan');
-            }}
+            onClick={() => setActiveTab('scan')}
             className={`min-h-[56px] flex-1 flex flex-col items-center justify-center transition-colors cursor-pointer ${
-              activeTab === 'scan' ? 'text-[#1a73e8]' : 'text-[#5a6675] hover:text-[#1f2733]'
+              activeTab === 'scan' ? 'text-[#4285F4]' : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <div
               className={`px-4 py-1 rounded-[16px] flex items-center justify-center transition-colors ${
-                activeTab === 'scan' ? 'bg-[#e8f0fe]' : ''
+                activeTab === 'scan' ? (isDark ? 'bg-[#4285F4]/15' : 'bg-[#4285F4]/10') : ''
               }`}
             >
               <Camera className="w-5 h-5" />
             </div>
-            <span className="text-[11px] font-semibold mt-0.5">Scan</span>
+            <span className="text-[11px] font-bold mt-0.5">Scan</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('inventory')}
             className={`min-h-[56px] flex-1 flex flex-col items-center justify-center transition-colors relative cursor-pointer ${
-              activeTab === 'inventory' ? 'text-[#1a73e8]' : 'text-[#5a6675] hover:text-[#1f2733]'
+              activeTab === 'inventory' ? 'text-[#4285F4]' : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <div
               className={`px-4 py-1 rounded-[16px] flex items-center justify-center transition-colors relative ${
-                activeTab === 'inventory' ? 'bg-[#e8f0fe]' : ''
+                activeTab === 'inventory' ? (isDark ? 'bg-[#4285F4]/15' : 'bg-[#4285F4]/10') : ''
               }`}
             >
               <Package className="w-5 h-5" />
               {materials.length > 0 && (
-                <span className="absolute -top-1 right-2 bg-[#1a73e8] text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                <span className="absolute -top-1 right-2 ai-rainbow-gradient text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-extrabold shadow-sm">
                   {materials.length}
                 </span>
               )}
             </div>
-            <span className="text-[11px] font-semibold mt-0.5">Inventory</span>
+            <span className="text-[11px] font-bold mt-0.5">Inventory</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSenpaiInitialPrompt(null);
+              setActiveTab('senpai');
+            }}
+            className={`min-h-[56px] flex-1 flex flex-col items-center justify-center transition-colors relative cursor-pointer ${
+              activeTab === 'senpai' ? 'text-[#9B72CB]' : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <div
+              className={`px-4 py-1 rounded-[16px] flex items-center justify-center transition-colors relative ${
+                activeTab === 'senpai' ? (isDark ? 'bg-[#9B72CB]/20' : 'bg-[#9B72CB]/10') : ''
+              }`}
+            >
+              <Mic className="w-5 h-5 text-[#9B72CB]" />
+              <span className="absolute -top-1 right-2 ai-rainbow-gradient text-white text-[8px] font-black px-1 rounded-full shadow-sm">
+                AI
+              </span>
+            </div>
+            <span className="text-[11px] font-bold mt-0.5">Senpai</span>
           </button>
         </nav>
+
+        {/* ============================================================= */}
+        {/* MATERIAL ITEM DETAILS & BATCH HISTORY MODAL                   */}
+        {/* ============================================================= */}
+        <MaterialDetailsModal
+          material={selectedMaterialForDetails}
+          isOpen={!!selectedMaterialForDetails}
+          onClose={() => setSelectedMaterialForDetails(null)}
+          isDark={isDark}
+          onMaterialUpdated={() => {
+            // Materials list will auto-update via onSnapshot subscription
+          }}
+        />
       </div>
     </div>
   );

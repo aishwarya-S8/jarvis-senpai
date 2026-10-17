@@ -1,8 +1,12 @@
 {
+  "projectId": "jarvis-senpai",
+  "appId": "1:1094239236773:web:5bb4bbb65b27fb3cfad34c",
   "apiKey": "AIzaSyAj_6ptbmGZczgrnzeWB4kZR8qhNJNMtSs",
   "authDomain": "jarvis-senpai.firebaseapp.com",
-  "projectId": "jarvis-senpai",
+  "firestoreDatabaseId": "ai-studio-jarvissenpai-a7e4596a-2da6-4c67-8613-5b716876e88e",
   "storageBucket": "jarvis-senpai.firebasestorage.app",
   "messagingSenderId": "1094239236773",
-  "appId": "1:1094239236773:web:7f928cda311b0e5ffad34c"
+  "measurementId": "",
+  "oAuthClientId": "1094239236773-m81dh27db8fimch29mqpqqv7he5rg47k.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

@@ -4,9 +4,10 @@ import {
   getDocs,
   onSnapshot,
   query,
-  orderBy,
+  where,
   deleteDoc,
   doc,
+  updateDoc,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { ExtractionResult } from './gemini';
@@ -14,23 +15,38 @@ import { ExtractionResult } from './gemini';
 export interface MaterialItem {
   id?: string;
   name: string;
-  category: string;
-  batchNo: string;
-  purchaseDate: string;
+  category: string | null;
+  batchNo: string | null;
+  purchaseDate: string | null;
   shelfLifeDays: number;
-  expiryDate: string;
-  quantity: number;
-  unit: string;
+  expiryDate: string | null;
+  quantity: number | null;
+  unit: string | null;
   confidence: number;
   status: 'ok' | 'expiring' | 'expired';
   createdAt: string;
 }
 
+export interface BatchUsageLog {
+  id?: string;
+  batchNo: string;
+  materialId?: string;
+  materialName?: string;
+  action: 'initial_stock' | 'dispensed' | 'qc_inspection' | 'adjustment' | 'disposed';
+  quantityChange: number; // e.g. -5, +20, etc.
+  remainingQuantity?: number;
+  unit: string;
+  purposeOrNotes: string;
+  operator: string;
+  timestamp: string;
+}
+
 /**
  * Calculates expiryDate = purchaseDate + shelfLifeDays
- * Returns ISO date string YYYY-MM-DD
+ * Returns ISO date string YYYY-MM-DD or null if purchaseDate is not provided
  */
-export function calculateExpiryDate(purchaseDateStr: string, shelfLifeDays: number = 90): string {
+export function calculateExpiryDate(purchaseDateStr: string | null | undefined, shelfLifeDays: number = 90): string | null {
+  if (!purchaseDateStr) return null;
   try {
     const parts = purchaseDateStr.split('-');
     let date: Date;
@@ -41,15 +57,13 @@ export function calculateExpiryDate(purchaseDateStr: string, shelfLifeDays: numb
     }
 
     if (isNaN(date.getTime())) {
-      date = new Date();
+      return null;
     }
 
     date.setDate(date.getDate() + shelfLifeDays);
     return date.toISOString().split('T')[0];
-  } catch (err) {
-    const fallback = new Date();
-    fallback.setDate(fallback.getDate() + shelfLifeDays);
-    return fallback.toISOString().split('T')[0];
+  } catch {
+    return null;
   }
 }
 
@@ -57,9 +71,9 @@ export function calculateExpiryDate(purchaseDateStr: string, shelfLifeDays: numb
  * Computes dynamic status:
  * - Red 'expired': expiry date is in the past
  * - Amber 'expiring': expiry date is within 7 days
- * - Green 'ok': expiry date is > 7 days away
+ * - Green 'ok': expiry date is > 7 days away or valid
  */
-export function computeMaterialStatus(expiryDateStr: string): 'ok' | 'expiring' | 'expired' {
+export function computeMaterialStatus(expiryDateStr: string | null | undefined): 'ok' | 'expiring' | 'expired' {
   if (!expiryDateStr) return 'ok';
   try {
     const now = new Date();
@@ -93,7 +107,8 @@ export function computeMaterialStatus(expiryDateStr: string): 'ok' | 'expiring' 
 
 /**
  * Writes an extracted material result to Firestore collection "materials"
- * with expiryDate = purchaseDate + shelfLifeDays and status "ok".
+ * with expiryDate = purchaseDate + shelfLifeDays and status "ok",
+ * and automatically logs the initial receipt into "batchUsageLogs".
  */
 export async function saveMaterialToFirestore(
   extracted: ExtractionResult,
@@ -103,14 +118,14 @@ export async function saveMaterialToFirestore(
 
   const newMaterial: Omit<MaterialItem, 'id'> = {
     name: extracted.name || 'Unnamed Material',
-    category: extracted.category || 'General',
-    batchNo: extracted.batchNo || 'N/A',
-    purchaseDate: extracted.purchaseDate || new Date().toISOString().split('T')[0],
+    category: extracted.category ?? null,
+    batchNo: extracted.batchNo ?? null,
+    purchaseDate: extracted.purchaseDate ?? null,
     shelfLifeDays,
     expiryDate,
-    quantity: extracted.quantity || 1,
-    unit: extracted.unit || 'pcs',
-    confidence: extracted.confidence ?? 0.95,
+    quantity: extracted.quantity ?? null,
+    unit: extracted.unit ?? null,
+    confidence: extracted.confidence ?? 0,
     status: 'ok', // explicitly written as "ok" per prompt requirements
     createdAt: new Date().toISOString(),
   };
@@ -118,6 +133,27 @@ export async function saveMaterialToFirestore(
   const path = 'materials';
   try {
     const docRef = await addDoc(collection(db, path), newMaterial);
+
+    // If batchNo exists, create the initial intake log entry in batchUsageLogs
+    if (newMaterial.batchNo) {
+      const logPath = 'batchUsageLogs';
+      const initialLog: Omit<BatchUsageLog, 'id'> = {
+        batchNo: newMaterial.batchNo,
+        materialId: docRef.id,
+        materialName: newMaterial.name,
+        action: 'initial_stock',
+        quantityChange: newMaterial.quantity || 0,
+        remainingQuantity: newMaterial.quantity || 0,
+        unit: newMaterial.unit || 'units',
+        purposeOrNotes: `Initial receipt into inventory via scanner extraction (Batch: ${newMaterial.batchNo})`,
+        operator: 'Jarvis Senpai AI System',
+        timestamp: new Date().toISOString(),
+      };
+      await addDoc(collection(db, logPath), initialLog).catch((err) => {
+        console.warn('Could not record initial batch intake log:', err);
+      });
+    }
+
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -166,5 +202,98 @@ export async function deleteMaterial(id: string): Promise<void> {
     await deleteDoc(doc(db, 'materials', id));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Fetches all material entries matching a specific Batch/LOT number from Firestore
+ */
+export async function fetchBatchEntries(batchNo: string): Promise<MaterialItem[]> {
+  if (!batchNo) return [];
+  const path = 'materials';
+  try {
+    const q = query(collection(db, path), where('batchNo', '==', batchNo));
+    const snapshot = await getDocs(q);
+    const entries: MaterialItem[] = snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...(docSnap.data() as Omit<MaterialItem, 'id'>),
+    }));
+    entries.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    return entries;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
+  }
+}
+
+/**
+ * Subscribes to real-time usage logs for a specific Batch/LOT number from Firestore
+ */
+export function subscribeBatchUsageLogs(
+  batchNo: string,
+  onUpdate: (logs: BatchUsageLog[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  if (!batchNo) {
+    onUpdate([]);
+    return () => {};
+  }
+  const path = 'batchUsageLogs';
+  const q = query(collection(db, path), where('batchNo', '==', batchNo));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const logs: BatchUsageLog[] = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...(docSnap.data() as Omit<BatchUsageLog, 'id'>),
+      }));
+      // Sort newest first
+      logs.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+      onUpdate(logs);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Writes a new batch usage log / dispensing activity to Firestore
+ * and optionally updates the material's current quantity
+ */
+export async function addBatchUsageLog(
+  log: Omit<BatchUsageLog, 'id'>,
+  materialDocId?: string,
+  newRemainingQuantity?: number
+): Promise<string> {
+  const path = 'batchUsageLogs';
+  try {
+    const docRef = await addDoc(collection(db, path), log);
+
+    if (materialDocId && typeof newRemainingQuantity === 'number') {
+      const matRef = doc(db, 'materials', materialDocId);
+      await updateDoc(matRef, { quantity: newRemainingQuantity });
+    }
+
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    throw error;
+  }
+}
+
+/**
+ * Updates a material's quantity directly in Firestore
+ */
+export async function updateMaterialQuantity(id: string, newQuantity: number): Promise<void> {
+  const path = `materials/${id}`;
+  try {
+    const matRef = doc(db, 'materials', id);
+    await updateDoc(matRef, { quantity: newQuantity });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
   }
 }

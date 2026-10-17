@@ -52,12 +52,65 @@
         }
       },
       "required": ["name", "batchNo", "purchaseDate", "expiryDate", "quantity", "unit", "status"]
+    },
+    "BatchUsageLog": {
+      "title": "BatchUsageLog",
+      "description": "A historical usage log, dispensing record, or adjustment for a specific batch/LOT number.",
+      "type": "object",
+      "properties": {
+        "batchNo": {
+          "type": "string",
+          "description": "The specific Batch/LOT identifier"
+        },
+        "materialId": {
+          "type": "string",
+          "description": "Associated material document ID"
+        },
+        "materialName": {
+          "type": "string",
+          "description": "Name of the material item"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["initial_stock", "dispensed", "qc_inspection", "adjustment", "disposed"],
+          "description": "Type of batch activity"
+        },
+        "quantityChange": {
+          "type": "number",
+          "description": "Amount added or consumed (e.g. -5, +20)"
+        },
+        "remainingQuantity": {
+          "type": "number",
+          "description": "Remaining stock balance after this activity"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit of measurement"
+        },
+        "purposeOrNotes": {
+          "type": "string",
+          "description": "Operational notes or purpose for usage"
+        },
+        "operator": {
+          "type": "string",
+          "description": "Name of the technician or user who performed the action"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp of when the event occurred"
+        }
+      },
+      "required": ["batchNo", "action", "quantityChange", "unit", "timestamp"]
     }
   },
   "firestore": {
     "/materials/{materialId}": {
       "schema": "Material",
       "description": "Collection of scanned materials and inventory items."
+    },
+    "/batchUsageLogs/{logId}": {
+      "schema": "BatchUsageLog",
+      "description": "Collection of historical batch activities and dispensing usage logs."
     }
   }
 }
