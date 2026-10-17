@@ -1,9 +1,17 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+
+export const firebaseConfig = {
+  apiKey: "AIzaSyAj_6ptbmGZczgrnzeWB4kZR8qhNJNMtSs",
+  authDomain: "jarvis-senpai.firebaseapp.com",
+  projectId: "jarvis-senpai",
+  storageBucket: "jarvis-senpai.firebasestorage.app",
+  messagingSenderId: "1094239236773",
+  appId: "1:1094239236773:web:7f928cda311b0e5ffad34c"
+};
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app);
 
 export enum OperationType {
   CREATE = 'create',

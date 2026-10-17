@@ -2,174 +2,59 @@
 
 @layer base {
   :root {
-    --bg-dark: #0b0d12;
-    --bg-light: #f8fafc;
+    --bg-page: #f4f6f9;
+    --surface-card: #ffffff;
+    --primary-blue: #1a73e8;
+    --text-main: #1f2733;
+    --text-muted: #5a6675;
     
-    /* Google Brand Palette */
-    --google-blue: #4285F4;
-    --google-green: #34A853;
-    --google-yellow: #FBBC04;
-    --google-red: #EA4335;
-    --google-purple: #9B72CB;
+    --status-ok: #188038;
+    --status-ok-bg: #e6f4ea;
+    --status-ok-border: #ceead6;
 
-    /* Status Colors */
-    --status-ok: #34A853;
-    --status-expiring: #f29900;
-    --status-expired: #EA4335;
+    --status-expiring: #b06000;
+    --status-expiring-bg: #fef7e0;
+    --status-expiring-border: #feefc3;
+
+    --status-expired: #c5221f;
+    --status-expired-bg: #fce8e6;
+    --status-expired-border: #fad2cf;
   }
 
   body {
     font-family: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f4f6f9;
+    color: #1f2733;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    overflow-x: hidden;
   }
 }
 
-/* ========================================================================= */
-/* AURORA GRADIENT MESH DRIFT ANIMATIONS                                      */
-/* ========================================================================= */
-
-@keyframes aurora-float-1 {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  33% {
-    transform: translate(25px, -35px) scale(1.1);
-  }
-  66% {
-    transform: translate(-20px, 20px) scale(0.95);
-  }
+/* Material 3 soft elevation shadow tokens */
+.m3-elevation-1 {
+  box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.08), 0px 1px 2px 0px rgba(0, 0, 0, 0.12);
 }
 
-@keyframes aurora-float-2 {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  33% {
-    transform: translate(-30px, 25px) scale(1.08);
-  }
-  66% {
-    transform: translate(20px, -20px) scale(0.92);
-  }
+.m3-elevation-2 {
+  box-shadow: 0px 2px 6px 2px rgba(0, 0, 0, 0.08), 0px 1px 2px 0px rgba(0, 0, 0, 0.14);
 }
 
-@keyframes aurora-float-3 {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  50% {
-    transform: translate(25px, 20px) scale(1.12);
-  }
+.m3-elevation-3 {
+  box-shadow: 0px 4px 8px 3px rgba(0, 0, 0, 0.10), 0px 1px 3px 0px rgba(0, 0, 0, 0.15);
 }
 
-.aurora-blob-blue {
-  animation: aurora-float-1 20s ease-in-out infinite alternate;
+.m3-elevation-4 {
+  box-shadow: 0px 6px 12px 4px rgba(0, 0, 0, 0.10), 0px 2px 4px 0px rgba(0, 0, 0, 0.16);
 }
 
-.aurora-blob-red {
-  animation: aurora-float-2 24s ease-in-out infinite alternate;
+/* Material 3 Signature Shared-Element Transition tokens */
+/* Easing curve: cubic-bezier(0.2, 0.0, 0.0, 1.0) ~300ms ease-out */
+.m3-morph-transition {
+  transition: all 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0);
+  will-change: transform, height, border-radius, box-shadow;
 }
 
-.aurora-blob-green {
-  animation: aurora-float-3 22s ease-in-out infinite alternate;
-}
-
-.aurora-blob-yellow {
-  animation: aurora-float-1 26s ease-in-out infinite alternate-reverse;
-}
-
-/* ========================================================================= */
-/* SIGNATURE RAINBOW GRADIENTS                                               */
-/* ========================================================================= */
-
-.ai-rainbow-gradient {
-  background: linear-gradient(135deg, #4285F4 0%, #9B72CB 32%, #EA4335 68%, #FBBC04 100%);
-}
-
-.ai-rainbow-gradient-hover:hover {
-  background: linear-gradient(135deg, #5393ff 0%, #af85e2 32%, #f25547 68%, #ffc726 100%);
-}
-
-.ai-rainbow-text {
-  background: linear-gradient(135deg, #4285F4 0%, #9B72CB 35%, #EA4335 70%, #FBBC04 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.ai-rainbow-border {
-  border-image: linear-gradient(135deg, #4285F4, #9B72CB, #EA4335, #FBBC04) 1;
-}
-
-/* ========================================================================= */
-/* 3D TWO-SIDED CARD FLIP (700ms cubic-bezier ease-out)                       */
-/* ========================================================================= */
-
-.perspective-1200 {
-  perspective: 1200px;
-}
-
-.preserve-3d {
-  transform-style: preserve-3d;
-}
-
-.backface-hidden {
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.card-flip-flipper {
-  transition: transform 700ms cubic-bezier(0.2, 0.0, 0.0, 1.0);
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
-.card-flip-flipper.is-flipped {
-  transform: rotateY(180deg);
-}
-
-.card-face-front {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transform: rotateY(0deg);
-  z-index: 2;
-}
-
-.card-face-back {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transform: rotateY(180deg);
-  z-index: 1;
-}
-
-/* Diagonal shining halo sheen sweep */
-@keyframes halo-sheen-sweep {
-  0% {
-    transform: translate(-120%, -120%) rotate(25deg);
-    opacity: 0;
-  }
-  20% {
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(140%, 140%) rotate(25deg);
-    opacity: 0;
-  }
-}
-
-.halo-sheen-active {
-  animation: halo-sheen-sweep 1000ms cubic-bezier(0.2, 0.0, 0.0, 1.0) forwards;
-}
-
-/* Scale-bounce for status stamp */
-@keyframes stamp-bounce {
+@keyframes m3-stamp-bounce {
   0% {
     transform: scale(0.35);
     opacity: 0;
@@ -187,15 +72,10 @@
   }
 }
 
-.stamp-bounce-in {
-  animation: stamp-bounce 380ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 400ms both;
-}
-
-/* Field cascades */
-@keyframes field-cascade-in {
+@keyframes m3-field-cascade {
   0% {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(12px);
   }
   100% {
     opacity: 1;
@@ -203,24 +83,7 @@
   }
 }
 
-.cascade-field-1 {
-  animation: field-cascade-in 340ms cubic-bezier(0.2, 0, 0, 1) 320ms both;
-}
-
-.cascade-field-2 {
-  animation: field-cascade-in 340ms cubic-bezier(0.2, 0, 0, 1) 400ms both;
-}
-
-.cascade-field-3 {
-  animation: field-cascade-in 340ms cubic-bezier(0.2, 0, 0, 1) 480ms both;
-}
-
-.cascade-field-4 {
-  animation: field-cascade-in 340ms cubic-bezier(0.2, 0, 0, 1) 560ms both;
-}
-
-/* Shimmer animation */
-@keyframes skeleton-shimmer {
+@keyframes m3-shimmer-sweep {
   0% {
     transform: translateX(-100%);
   }
@@ -229,240 +92,66 @@
   }
 }
 
-.skeleton-shimmer-sweep::after {
+.m3-stamp-chip {
+  animation: m3-stamp-bounce 340ms cubic-bezier(0.2, 0.0, 0.0, 1.0) forwards;
+}
+
+.m3-cascade-1 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 40ms both;
+}
+
+.m3-cascade-2 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 90ms both;
+}
+
+.m3-cascade-3 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 140ms both;
+}
+
+.m3-cascade-4 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 190ms both;
+}
+
+.m3-cascade-5 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 240ms both;
+}
+
+/* Skeleton shimmer gradient wave */
+.m3-shimmer-bar {
+  position: relative;
+  overflow: hidden;
+  background-color: #e2e8f0;
+}
+
+.m3-shimmer-bar::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: linear-gradient(
     90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.12) 50%,
-    transparent 100%
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.65) 50%,
+    rgba(255, 255, 255, 0) 100%
   );
-  animation: skeleton-shimmer 1.5s infinite;
+  animation: m3-shimmer-sweep 1.4s infinite;
 }
 
-/* ========================================================================= */
-/* SENPAI VOICE & MICROPHONE PULSE ANIMATIONS                                */
-/* ========================================================================= */
-
-@keyframes mic-pulse-expand {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.35);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-}
-
-.mic-pulse-ring-1 {
-  animation: mic-pulse-expand 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
-}
-
-.mic-pulse-ring-2 {
-  animation: mic-pulse-expand 2s cubic-bezier(0, 0.2, 0.8, 1) 0.65s infinite;
-}
-
-.mic-pulse-ring-3 {
-  animation: mic-pulse-expand 2s cubic-bezier(0, 0.2, 0.8, 1) 1.3s infinite;
-}
-
-@keyframes wave-bounce {
-  0%, 100% {
-    height: 6px;
-  }
-  50% {
-    height: 28px;
-  }
-}
-
-.wave-bar-1 { animation: wave-bounce 0.8s ease-in-out 0.1s infinite; }
-.wave-bar-2 { animation: wave-bounce 0.7s ease-in-out 0.25s infinite; }
-.wave-bar-3 { animation: wave-bounce 0.9s ease-in-out 0.05s infinite; }
-.wave-bar-4 { animation: wave-bounce 0.65s ease-in-out 0.35s infinite; }
-.wave-bar-5 { animation: wave-bounce 0.85s ease-in-out 0.18s infinite; }
-.wave-bar-6 { animation: wave-bounce 0.75s ease-in-out 0.3s infinite; }
-
-/* ========================================================================= */
-/* SENPAI TWO-STATE ANIMATIONS: FLUID ORB & 3D CARD REVEAL                   */
-/* ========================================================================= */
-
-@keyframes senpai-orb-breathe {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.06);
-  }
-}
-
-.senpai-orb-breathe-anim {
-  animation: senpai-orb-breathe 4s ease-in-out infinite;
-}
-
-@keyframes senpai-orb-swirl {
-  0% {
-    transform: rotate(0deg) scale(1.02);
-  }
-  50% {
-    transform: rotate(180deg) scale(1.06);
-  }
-  100% {
-    transform: rotate(360deg) scale(1.02);
-  }
-}
-
-.senpai-orb-swirl-anim {
-  animation: senpai-orb-swirl 5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-@keyframes senpai-liquid-morph {
-  0% {
-    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-  }
-  33% {
-    border-radius: 40% 60% 65% 35% / 45% 65% 35% 55%;
-  }
-  66% {
-    border-radius: 50% 50% 35% 65% / 55% 40% 60% 45%;
-  }
-  100% {
-    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-  }
-}
-
-.senpai-liquid-morph-anim {
-  animation: senpai-liquid-morph 8s ease-in-out infinite;
-}
-
-/* 3D Flip Container for Senpai Result Card */
-.senpai-flip-perspective {
-  perspective: 1200px;
-}
-
-.senpai-card-flipper {
-  width: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  transition: transform 700ms cubic-bezier(0.2, 0.0, 0.0, 1.0);
-}
-
-.senpai-card-flipper.is-flipped {
-  transform: rotateY(180deg);
-}
-
-.senpai-face-front,
-.senpai-face-back {
-  width: 100%;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.senpai-face-front {
-  transform: rotateY(0deg);
-}
-
-.senpai-face-back {
-  transform: rotateY(180deg);
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-}
-
-/* Diagonal shining halo sheen sweep */
-@keyframes senpai-sheen-sweep {
-  0% {
-    transform: translate(-140%, -140%) rotate(25deg);
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.9;
-  }
-  80% {
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate(140%, 140%) rotate(25deg);
-    opacity: 0;
-  }
-}
-
-.senpai-sheen-active {
-  animation: senpai-sheen-sweep 1000ms cubic-bezier(0.2, 0.0, 0.0, 1.0) forwards;
-}
-
-/* ========================================================================= */
-/* PREFERS-REDUCED-MOTION (ACCESSIBILITY)                                    */
-/* ========================================================================= */
-
+/* Respect prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
-  .aurora-blob-blue,
-  .aurora-blob-red,
-  .aurora-blob-green,
-  .aurora-blob-yellow,
-  .halo-sheen-active,
-  .stamp-bounce-in,
-  .cascade-field-1,
-  .cascade-field-2,
-  .cascade-field-3,
-  .cascade-field-4,
-  .skeleton-shimmer-sweep::after {
+  .m3-morph-transition,
+  .m3-stamp-chip,
+  .m3-cascade-1,
+  .m3-cascade-2,
+  .m3-cascade-3,
+  .m3-cascade-4,
+  .m3-cascade-5,
+  .m3-shimmer-bar::after {
     animation: none !important;
-    transform: none !important;
     transition: none !important;
+    transform: none !important;
     opacity: 1 !important;
-  }
-
-  .card-flip-flipper {
-    transition: opacity 300ms ease-out !important;
-    transform-style: flat !important;
-  }
-
-  .card-flip-flipper.is-flipped {
-    transform: none !important;
-  }
-
-  .card-flip-flipper.is-flipped .card-face-front {
-    display: none !important;
-  }
-
-  .card-flip-flipper.is-flipped .card-face-back {
-    transform: none !important;
-    position: relative !important;
-    display: block !important;
-  }
-
-  .senpai-orb-breathe-anim,
-  .senpai-orb-swirl-anim,
-  .senpai-liquid-morph-anim,
-  .senpai-sheen-active {
-    animation: none !important;
-    transform: none !important;
-  }
-
-  .senpai-card-flipper {
-    transition: opacity 300ms ease-out !important;
-    transform-style: flat !important;
-  }
-
-  .senpai-card-flipper.is-flipped {
-    transform: none !important;
-  }
-
-  .senpai-card-flipper.is-flipped .senpai-face-front {
-    display: none !important;
-  }
-
-  .senpai-card-flipper.is-flipped .senpai-face-back {
-    transform: none !important;
-    position: relative !important;
-    display: block !important;
   }
 }

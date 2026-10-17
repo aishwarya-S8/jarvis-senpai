@@ -2,8 +2,7 @@
   "name": "jarvis-senpai",
   "description": "Mobile-first Material 3 camera scanner with instant photo capture, high-fidelity preview, retake, and use photo actions.",
   "requestFramePermissions": [
-    "camera",
-    "microphone"
+    "camera"
   ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

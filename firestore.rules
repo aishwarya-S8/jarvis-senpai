@@ -4,12 +4,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /materials/{materialId} {
       allow read, write: if true;
-      match /usageLogs/{logId} {
-        allow read, write: if true;
-      }
     }
-    match /batchUsageLogs/{logId} {
+    match /alerts/{alertId} {
+      allow read, write: if true;
+    }
+    match /orders/{orderId} {
       allow read, write: if true;
     }
   }
 }
+
