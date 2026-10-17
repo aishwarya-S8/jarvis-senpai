@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-page: #f4f6f9;
+    --surface-card: #ffffff;
+    --primary-blue: #1a73e8;
+    --text-main: #1f2733;
+    --text-muted: #5a6675;
+    
+    --status-ok: #188038;
+    --status-ok-bg: #e6f4ea;
+    --status-ok-border: #ceead6;
+
+    --status-expiring: #b06000;
+    --status-expiring-bg: #fef7e0;
+    --status-expiring-border: #feefc3;
+
+    --status-expired: #c5221f;
+    --status-expired-bg: #fce8e6;
+    --status-expired-border: #fad2cf;
+  }
+
+  body {
+    font-family: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f4f6f9;
+    color: #1f2733;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+}
+
+/* Material 3 soft elevation shadow tokens */
+.m3-elevation-1 {
+  box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.08), 0px 1px 2px 0px rgba(0, 0, 0, 0.12);
+}
+
+.m3-elevation-2 {
+  box-shadow: 0px 2px 6px 2px rgba(0, 0, 0, 0.08), 0px 1px 2px 0px rgba(0, 0, 0, 0.14);
+}
+
+.m3-elevation-3 {
+  box-shadow: 0px 4px 8px 3px rgba(0, 0, 0, 0.10), 0px 1px 3px 0px rgba(0, 0, 0, 0.15);
+}
+
+.m3-elevation-4 {
+  box-shadow: 0px 6px 12px 4px rgba(0, 0, 0, 0.10), 0px 2px 4px 0px rgba(0, 0, 0, 0.16);
+}
+
+/* Material 3 Signature Shared-Element Transition tokens */
+/* Easing curve: cubic-bezier(0.2, 0.0, 0.0, 1.0) ~300ms ease-out */
+.m3-morph-transition {
+  transition: all 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0);
+  will-change: transform, height, border-radius, box-shadow;
+}
+
+@keyframes m3-stamp-bounce {
+  0% {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+  65% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  85% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes m3-field-cascade {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes m3-shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.m3-stamp-chip {
+  animation: m3-stamp-bounce 340ms cubic-bezier(0.2, 0.0, 0.0, 1.0) forwards;
+}
+
+.m3-cascade-1 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 40ms both;
+}
+
+.m3-cascade-2 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 90ms both;
+}
+
+.m3-cascade-3 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 140ms both;
+}
+
+.m3-cascade-4 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 190ms both;
+}
+
+.m3-cascade-5 {
+  animation: m3-field-cascade 300ms cubic-bezier(0.2, 0.0, 0.0, 1.0) 240ms both;
+}
+
+/* Skeleton shimmer gradient wave */
+.m3-shimmer-bar {
+  position: relative;
+  overflow: hidden;
+  background-color: #e2e8f0;
+}
+
+.m3-shimmer-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.65) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: m3-shimmer-sweep 1.4s infinite;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .m3-morph-transition,
+  .m3-stamp-chip,
+  .m3-cascade-1,
+  .m3-cascade-2,
+  .m3-cascade-3,
+  .m3-cascade-4,
+  .m3-cascade-5,
+  .m3-shimmer-bar::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}

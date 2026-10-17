@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "Material": {
+      "title": "Material",
+      "description": "An inventory item or scanned raw material document with batch and shelf life metadata.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Material or item name"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category or classification"
+        },
+        "batchNo": {
+          "type": "string",
+          "description": "Batch number, lot number, or reference identifier"
+        },
+        "purchaseDate": {
+          "type": "string",
+          "description": "Purchase or manufacture date in YYYY-MM-DD"
+        },
+        "shelfLifeDays": {
+          "type": "number",
+          "description": "Shelf life in days"
+        },
+        "expiryDate": {
+          "type": "string",
+          "description": "Calculated expiry date in YYYY-MM-DD"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Quantity count"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit of measurement"
+        },
+        "confidence": {
+          "type": "number",
+          "description": "Gemini extraction confidence score"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "expiring", "expired"],
+          "description": "Current status of the material"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["name", "batchNo", "purchaseDate", "expiryDate", "quantity", "unit", "status"]
+    }
+  },
+  "firestore": {
+    "/materials/{materialId}": {
+      "schema": "Material",
+      "description": "Collection of scanned materials and inventory items."
+    }
+  }
+}
