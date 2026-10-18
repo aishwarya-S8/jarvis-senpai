@@ -33,7 +33,6 @@ import {
   AppLanguage,
   speakText,
   stopSpeech,
-  SUPPORTED_LANGUAGES,
 } from '../services/speechService';
 import { useLanguage } from '../context/LanguageContext';
 import { formatT } from '../services/i18n';
@@ -58,7 +57,7 @@ export default function SenpaiScreen({
   onNavigateToScan,
   onNavigateToInventory,
 }: SenpaiScreenProps) {
-  const { currentLang, setLanguage, t } = useLanguage();
+  const { currentLang, t } = useLanguage();
 
   // Check SpeechRecognition browser API support
   const SpeechRecognitionAPI =
@@ -723,43 +722,13 @@ export default function SenpaiScreen({
   return (
     <div className="flex-1 flex flex-col justify-between h-full overflow-hidden relative">
       {/* ================================================================= */}
-      {/* SUB-HEADER: Language Chips + TTS Toggle + View Switcher           */}
+      {/* SUB-HEADER: View Switcher + TTS Toggle (language: global header)  */}
       {/* ================================================================= */}
       <div
-        className={`px-4 py-2 border-b flex items-center justify-between text-xs z-10 transition-colors ${
+        className={`px-4 py-2 border-b flex items-center justify-end text-xs z-10 transition-colors ${
           isDark ? 'bg-black/25 border-white/10' : 'bg-slate-50/70 border-slate-200/80'
         }`}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-slate-400">
-            {t.languageLabel}
-          </span>
-
-          {/* Unified Language Selector Chips: EN / HI / KN */}
-          <div className="flex items-center rounded-full p-0.5 border border-white/10 bg-black/20">
-            {SUPPORTED_LANGUAGES.map((lang) => {
-              const isSelected = currentLang === lang.code;
-              return (
-                <button
-                  key={lang.code}
-                  type="button"
-                  onClick={() => setLanguage(lang.code)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
-                    isSelected
-                      ? 'ai-rainbow-gradient text-white shadow-sm'
-                      : isDark
-                      ? 'text-slate-400 hover:text-white'
-                      : 'text-slate-600 hover:text-black'
-                  }`}
-                  title={`${lang.label} (${lang.nativeLabel})`}
-                >
-                  {lang.code}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* View Toggle: Orb Hero vs Chat History */}
         <div className="flex items-center gap-1.5">
           <div className="flex items-center rounded-full p-0.5 border border-white/10 bg-black/20">

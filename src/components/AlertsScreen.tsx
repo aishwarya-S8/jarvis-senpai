@@ -228,16 +228,16 @@ export const AlertsScreen: React.FC<AlertsScreenProps> = ({
             <p className={th("text-[11px] text-[#795548]")}>
               {materialsNeedingConfig.length} material{materialsNeedingConfig.length === 1 ? '' : 's'} lack configured minimum safety thresholds. We do not invent thresholds without your input.
             </p>
-            <div className="flex gap-1.5 overflow-x-auto pt-1 no-scrollbar">
+            <div className="flex flex-wrap gap-1.5 pt-1">
               {materialsNeedingConfig.slice(0, 3).map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => onOpenSettings(m)}
-                  className={th("flex-shrink-0 bg-white hover:bg-[#fef7e0] border border-[#ffd54f] px-2.5 py-1 rounded-[10px] font-semibold text-[11px] text-[#b06000] flex items-center gap-1 cursor-pointer transition-colors")}
+                  className={th("max-w-full text-left bg-white hover:bg-[#fef7e0] border border-[#ffd54f] px-2.5 py-1 rounded-[10px] font-semibold text-[11px] text-[#b06000] flex items-center gap-1 cursor-pointer transition-colors")}
                 >
-                  <Sliders className="w-3 h-3" />
-                  <span>Configure {m.name.slice(0, 16)}...</span>
+                  <Sliders className="w-3 h-3 flex-shrink-0" />
+                  <span className="line-clamp-2 break-words">Configure {m.name}</span>
                 </button>
               ))}
             </div>

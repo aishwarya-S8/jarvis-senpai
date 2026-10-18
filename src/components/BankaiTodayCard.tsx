@@ -389,14 +389,14 @@ export default function BankaiTodayCard({
             return (
               <div
                 key={item.id}
-                className={`p-2.5 rounded-[16px] border transition-all flex items-center justify-between gap-2.5 shadow-sm hover:shadow-md ${
+                className={`p-2.5 rounded-[16px] border transition-all flex flex-wrap items-center justify-between gap-x-2.5 gap-y-2 shadow-sm hover:shadow-md ${
                   isDark
                     ? 'bg-white/[0.04] border-white/10 hover:border-white/20 hover:bg-white/[0.07]'
                     : 'bg-white border-slate-200 hover:border-[#9B72CB]/40 hover:bg-slate-50'
                 }`}
               >
-                {/* Left: Type Icon & Info */}
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                {/* Left: Type Icon & Info (takes the full row on narrow screens; actions wrap below) */}
+                <div className="flex items-start gap-2.5 min-w-0 flex-1 basis-[200px]">
                   <div
                     className={`w-7 h-7 rounded-[10px] flex items-center justify-center flex-shrink-0 ${
                       item.type === 'expired'
@@ -414,21 +414,17 @@ export default function BankaiTodayCard({
                     {item.type === 'task' && <ListTodo className="w-3.5 h-3.5" />}
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <h4
-                        className={`text-xs font-bold truncate leading-tight ${
-                          isDark ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
-                        {item.name}
-                      </h4>
-                      {item.batchNo && (
-                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-black/20 text-[#4285F4] flex-shrink-0">
-                          {item.batchNo}
-                        </span>
-                      )}
-                    </div>
+                  <div className="min-w-0 flex-1 flex flex-col">
+                    <h4
+                      className={`text-xs font-bold leading-snug line-clamp-2 break-words ${
+                        isDark ? 'text-white' : 'text-slate-900'
+                      }`}
+                    >
+                      {item.name}
+                    </h4>
+                    {item.batchNo && (
+                      <span className="text-[10px] font-mono text-[#4285F4] truncate mt-0.5">{item.batchNo}</span>
+                    )}
                     <div
                       className={`text-[10px] mt-0.5 truncate ${
                         isDark ? 'text-slate-400' : 'text-slate-500'
@@ -440,9 +436,9 @@ export default function BankaiTodayCard({
                 </div>
 
                 {/* Right: Status Chip + Shortcut Button to Inventory */}
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
                   <span
-                    className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border capitalize flex items-center gap-1 ${item.statusBadgeClasses}`}
+                    className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border capitalize flex items-center gap-1 whitespace-nowrap ${item.statusBadgeClasses}`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${item.dotColor}`} />
                     <span>{item.statusLabel}</span>

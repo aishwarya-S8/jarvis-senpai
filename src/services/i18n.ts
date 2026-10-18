@@ -194,7 +194,6 @@ export interface Translations {
   speechErrCouldNotStart: string;
   readyToInspect: string;
   vendorLabel: string;
-  languageLabel: string;
   speechTranscribedLocally: string;
   speakAgain: string;
   senpaiFooter: string;
@@ -402,7 +401,6 @@ export const TRANSLATIONS: Record<AppLanguage, Translations> = {
     speechErrCouldNotStart: 'Could not start speech recognition: {error}. Please type below.',
     readyToInspect: 'Ready to inspect barcode and batch certificate for',
     vendorLabel: 'Vendor:',
-    languageLabel: 'Language:',
     speechTranscribedLocally: 'Speech Transcribed Locally',
     speakAgain: 'Speak again',
     senpaiFooter: 'Local browser speech-to-text • Gemini tool reasoning • TTS spoken back in English (en-US)',
@@ -609,7 +607,6 @@ export const TRANSLATIONS: Record<AppLanguage, Translations> = {
     speechErrCouldNotStart: 'वाक् पहचान शुरू नहीं हो सकी: {error}। कृपया नीचे लिखें।',
     readyToInspect: 'बारकोड और बैच प्रमाणपत्र की जाँच के लिए तैयार:',
     vendorLabel: 'विक्रेता:',
-    languageLabel: 'भाषा:',
     speechTranscribedLocally: 'आवाज़ स्थानीय रूप से लिखी गई',
     speakAgain: 'फिर से सुनें',
     senpaiFooter: 'स्थानीय वाक् पहचान • जेमिनी टूल्स • हिंदी आवाज़ (hi-IN)',
@@ -816,7 +813,6 @@ export const TRANSLATIONS: Record<AppLanguage, Translations> = {
     speechErrCouldNotStart: 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಪ್ರಾರಂಭಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ: {error}. ದಯವಿಟ್ಟು ಕೆಳಗೆ ಟೈಪ್ ಮಾಡಿ.',
     readyToInspect: 'ಬಾರ್‌ಕೋಡ್ ಮತ್ತು ಬ್ಯಾಚ್ ಪ್ರಮಾಣಪತ್ರ ಪರಿಶೀಲನೆಗೆ ಸಿದ್ಧ:',
     vendorLabel: 'ಮಾರಾಟಗಾರ:',
-    languageLabel: 'ಭಾಷೆ:',
     speechTranscribedLocally: 'ಧ್ವನಿಯನ್ನು ಸ್ಥಳೀಯವಾಗಿ ಬರೆಯಲಾಗಿದೆ',
     speakAgain: 'ಮತ್ತೆ ಕೇಳಿ',
     senpaiFooter: 'ಸ್ಥಳೀಯ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ • ಜೆಮಿನಿ ಪರಿಕರಗಳು • ಕನ್ನಡ ಧ್ವನಿ (kn-IN)',
