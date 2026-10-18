@@ -42,6 +42,7 @@ interface SenpaiScreenProps {
   isDark: boolean;
   materials: MaterialItem[];
   initialPrompt?: string | null;
+  onInitialPromptConsumed?: () => void;
   onNavigateToScan: (presetItemName?: string) => void;
   onNavigateToInventory: (filter?: 'all' | 'ok' | 'expiring' | 'expired') => void;
 }
@@ -53,6 +54,7 @@ export default function SenpaiScreen({
   isDark,
   materials,
   initialPrompt,
+  onInitialPromptConsumed,
   onNavigateToScan,
   onNavigateToInventory,
 }: SenpaiScreenProps) {
@@ -144,6 +146,8 @@ export default function SenpaiScreen({
   useEffect(() => {
     if (initialPrompt) {
       handleSendText(initialPrompt);
+      // Clear it in the parent so it fires once, not again on the next mount
+      onInitialPromptConsumed?.();
     }
   }, [initialPrompt]);
 

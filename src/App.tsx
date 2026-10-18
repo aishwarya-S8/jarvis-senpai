@@ -1674,6 +1674,7 @@ export default function App() {
             isDark={isDark}
             materials={materials}
             initialPrompt={senpaiInitialPrompt}
+            onInitialPromptConsumed={() => setSenpaiInitialPrompt(null)}
             onNavigateToScan={(presetItem) => {
               setActiveTab('scan');
               setIsCameraActive(true);
