@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sliders, AlertCircle, CheckCircle2, ShieldCheck, Building2 } from 'lucide-react';
 import { MaterialItem, updateMaterialSettings } from '../services/materialService';
-import { getSuppliers } from '../services/supplierService';
+import { getSuppliers, getSampleSuppliers, Supplier } from '../services/supplierService';
 import { themeClasses } from './darkTheme';
 
 interface MaterialSettingsModalProps {
@@ -30,7 +30,21 @@ export const MaterialSettingsModal: React.FC<MaterialSettingsModalProps> = ({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const suppliers = getSuppliers();
+  const [suppliers, setSuppliers] = useState<Supplier[]>(getSampleSuppliers());
+
+  useEffect(() => {
+    if (!material) return;
+    getSuppliers({
+      materialName: material.name ?? undefined,
+      category: material.category ?? undefined,
+    })
+      .then((res) => {
+        if (res && res.length > 0) {
+          setSuppliers(res);
+        }
+      })
+      .catch(() => {});
+  }, [material?.name, material?.category]);
 
   useEffect(() => {
     if (!material) return;
@@ -39,7 +53,7 @@ export const MaterialSettingsModal: React.FC<MaterialSettingsModalProps> = ({
     setDailyUsageRate(material.dailyUsageRate !== undefined ? String(material.dailyUsageRate) : '');
     setSupplierLeadDays(material.supplierLeadDays !== undefined ? String(material.supplierLeadDays) : '');
     setUnitPrice(material.unitPrice !== undefined ? String(material.unitPrice) : '');
-    setSupplierId(material.supplierId || suppliers[0].id);
+    setSupplierId(material.supplierId || (suppliers[0]?.id ?? ''));
     setErrorMsg(null);
   }, [material, suppliers]);
 

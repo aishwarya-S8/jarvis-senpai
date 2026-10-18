@@ -21,13 +21,16 @@ import {
   MessageSquare,
   Bot,
   Zap,
-  HelpCircle
+  HelpCircle,
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import {
   ChatMessage,
   SenpaiFunctionCall,
   sendVoiceToSenpai,
 } from '../services/senpaiService';
+import { getSuppliers, Supplier } from '../services/supplierService';
 import { MaterialItem } from '../services/materialService';
 import {
   AppLanguage,
@@ -48,6 +51,164 @@ interface SenpaiScreenProps {
 
 type SenpaiPhase = 'idle' | 'listening' | 'thinking' | 'searching' | 'revealed';
 type SenpaiStatusKey = 'tapToSpeak' | 'listening' | 'thinking' | 'searching' | 'resultReady';
+
+interface FindSuppliersCardProps {
+  callIndex: number;
+  args: any;
+  isDark: boolean;
+  t: any;
+  handleSendText: (text: string) => void;
+}
+
+const FindSuppliersCard: React.FC<FindSuppliersCardProps> = ({
+  callIndex,
+  args,
+  isDark,
+  t,
+  handleSendText,
+}) => {
+  const materialName = args.materialName || 'Bio-Pharmaceutical Reagents';
+  const quantity = args.quantityNeeded || 50;
+  const category = args.category || args.region;
+
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+
+    getSuppliers({
+      materialName,
+      category,
+      quantity,
+    })
+      .then((data) => {
+        if (isMounted) {
+          setSuppliers(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Error fetching suppliers:', err);
+        if (isMounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [materialName, category, quantity]);
+
+  const topSupplierName = suppliers[0]?.name || 'Supplier';
+
+  return (
+    <div
+      key={`tool-${callIndex}`}
+      className={`mt-3 p-3.5 rounded-[20px] border transition-all ${
+        isDark ? 'bg-black/40 border-[#34A853]/30' : 'bg-[#e6f4ea]/80 border-[#34A853]/30'
+      }`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="p-1 rounded-lg bg-[#34A853]/20 text-[#34A853]">
+            <Truck className="w-4 h-4" />
+          </span>
+          <span className="text-xs font-bold font-['Google_Sans',sans-serif] text-[#34A853]">
+            {t.toolFindSuppliers}
+          </span>
+        </div>
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#34A853]/20 text-[#34A853]">
+          {t.quantity}: {quantity}
+        </span>
+      </div>
+
+      <p className="text-xs mb-2">
+        {t.suppliersFound} (<strong className="font-semibold">{materialName}</strong>):
+      </p>
+
+      {loading ? (
+        <div className="py-4 flex items-center justify-center gap-2 text-xs text-slate-500">
+          <Loader2 className="w-4 h-4 animate-spin text-[#34A853]" />
+          <span>Searching verified suppliers...</span>
+        </div>
+      ) : suppliers.length === 0 ? (
+        <div className="py-3 text-center text-xs text-slate-500">
+          No suppliers found.
+        </div>
+      ) : (
+        <div className="space-y-1.5 mb-3">
+          {suppliers.map((sup, idx) => (
+            <div
+              key={sup.id || idx}
+              className={`p-2.5 rounded-[12px] text-xs flex items-center justify-between gap-2 border ${
+                isDark ? 'bg-white/5 border-white/5' : 'bg-white border-slate-200'
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-bold flex items-center gap-1.5 flex-wrap">
+                  {sup.link ? (
+                    <a
+                      href={sup.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 truncate max-w-full"
+                    >
+                      <span className="truncate">{sup.name}</span>
+                      <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-70 hover:opacity-100" />
+                    </a>
+                  ) : (
+                    <span className="truncate">{sup.name}</span>
+                  )}
+                  {sup.isSynthetic && (
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                      Sample
+                    </span>
+                  )}
+                </div>
+                {sup.notes ? (
+                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{sup.notes}</div>
+                ) : (
+                  <div className="text-[10px] text-slate-400 mt-0.5">{t.deliveryEta}: {sup.leadDays} {t.days}</div>
+                )}
+              </div>
+              <div className="text-right flex-shrink-0">
+                {sup.price ? (
+                  <div className="font-extrabold text-[#34A853]">
+                    {typeof sup.price === 'number' ? `$${sup.price.toFixed(2)}` : String(sup.price)}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-slate-500 italic">
+                    price not listed — see link
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() =>
+          handleSendText(
+            formatT(t.draftOrderPrompt, {
+              quantity,
+              material: materialName,
+              supplier: topSupplierName,
+            })
+          )
+        }
+        className="w-full py-2 px-3 rounded-[14px] bg-[#34A853] hover:bg-[#2d9247] disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+      >
+        <FileCheck className="w-3.5 h-3.5" />
+        <span>{t.draftPoWithSupplier}</span>
+      </button>
+    </div>
+  );
+};
 
 export default function SenpaiScreen({
   isDark,
@@ -583,68 +744,15 @@ export default function SenpaiScreen({
     }
 
     if (name === 'findSuppliers') {
-      const materialName = args.materialName || 'Bio-Pharmaceutical Reagents';
-      const quantity = args.quantityNeeded || 50;
-
-      const suppliers = [
-        { name: 'Apex Bioscience Direct', quote: '$420.00 / lot', leadDays: 2, rating: '99.4%' },
-        { name: 'Kanto Chemical Logistics', quote: '$395.50 / lot', leadDays: 4, rating: '98.1%' },
-        { name: 'Global Material Hub', quote: '$380.00 / lot', leadDays: 7, rating: '96.8%' },
-      ];
-
       return (
-        <div
+        <FindSuppliersCard
           key={`tool-${callIndex}`}
-          className={`mt-3 p-3.5 rounded-[20px] border transition-all ${
-            isDark ? 'bg-black/40 border-[#34A853]/30' : 'bg-[#e6f4ea]/80 border-[#34A853]/30'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="p-1 rounded-lg bg-[#34A853]/20 text-[#34A853]">
-                <Truck className="w-4 h-4" />
-              </span>
-              <span className="text-xs font-bold font-['Google_Sans',sans-serif] text-[#34A853]">
-                {t.toolFindSuppliers}
-              </span>
-            </div>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#34A853]/20 text-[#34A853]">
-              {t.quantity}: {quantity}
-            </span>
-          </div>
-
-          <p className="text-xs mb-2">
-            {t.suppliersFound} (<strong className="font-semibold">{materialName}</strong>):
-          </p>
-
-          <div className="space-y-1.5 mb-3">
-            {suppliers.map((sup, idx) => (
-              <div
-                key={idx}
-                className={`p-2 rounded-[12px] text-xs flex items-center justify-between border ${
-                  isDark ? 'bg-white/5 border-white/5' : 'bg-white border-slate-200'
-                }`}
-              >
-                <div>
-                  <div className="font-bold">{sup.name}</div>
-                  <div className="text-[10px] text-slate-400">{t.deliveryEta}: {sup.leadDays} {t.days} • {sup.rating} {t.reliability}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-extrabold text-[#34A853]">{sup.quote}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => handleSendText(formatT(t.draftOrderPrompt, { quantity, material: materialName, supplier: 'Apex Bioscience Direct' }))}
-            className="w-full py-2 px-3 rounded-[14px] bg-[#34A853] hover:bg-[#2d9247] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
-          >
-            <FileCheck className="w-3.5 h-3.5" />
-            <span>{t.draftPoWithSupplier}</span>
-          </button>
-        </div>
+          callIndex={callIndex}
+          args={args}
+          isDark={isDark}
+          t={t}
+          handleSendText={handleSendText}
+        />
       );
     }
 

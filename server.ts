@@ -335,6 +335,146 @@ app.post('/api/extract', async (req, res) => {
 });
 
 /**
+ * SUPPLIER SEARCH ENDPOINT (Pipeline 3: Google Search Grounded)
+ * Takes { materialName, category, quantity? }
+ * Calls Gemini with Google Search grounding
+ * Returns JSON of suppliers + source links from grounding chunks
+ */
+app.post('/api/suppliers', async (req, res) => {
+  try {
+    const { materialName, category, quantity } = req.body || {};
+    if (!materialName || typeof materialName !== 'string' || !materialName.trim()) {
+      return res.status(400).json({ error: 'materialName is required' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn('GEMINI_API_KEY is not configured on server.');
+      return res.status(503).json({ error: 'Gemini service unavailable' });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const cleanCategory = (category && typeof category === 'string' && category.trim()) ? category.trim() : 'General';
+    const quantityContext = (quantity !== undefined && quantity !== null) ? ` (Quantity: ${quantity})` : '';
+    const prompt = `Find real suppliers/sellers for ${materialName.trim()} (${cleanCategory})${quantityContext}. For each return name, a source link, and a price ONLY if actually stated — never invent a price. Return strict JSON: [{name, link, price|null, note}].`;
+
+    let response;
+    let attempts = 0;
+    while (attempts < 2) {
+      attempts++;
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
+        });
+        break;
+      } catch (groundingErr: any) {
+        console.warn('Google Search grounding unavailable, falling back to standard generateContent:', groundingErr?.message || groundingErr);
+        try {
+          response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: prompt,
+          });
+          break;
+        } catch (fallbackErr) {
+          if (attempts >= 2) throw fallbackErr;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+    }
+
+    if (!response) {
+      throw new Error('No response received from Gemini');
+    }
+
+    // Pull real URLs from candidates[0].groundingMetadata.groundingChunks[].web.uri
+    const candidate = response.candidates?.[0];
+    const groundingChunks = (candidate?.groundingMetadata as any)?.groundingChunks || [];
+    const sourceLinks: string[] = [];
+    for (const chunk of groundingChunks) {
+      const uri = chunk?.web?.uri;
+      if (uri && typeof uri === 'string' && !sourceLinks.includes(uri)) {
+        sourceLinks.push(uri);
+      }
+    }
+
+    const rawText = response.text || '[]';
+    let jsonText = rawText.trim();
+    if (jsonText.includes('```')) {
+      jsonText = jsonText.replace(/^```[a-z]*\n?/im, '').replace(/\n?```$/m, '').trim();
+    }
+    const match = jsonText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (match) {
+      jsonText = match[0];
+    }
+
+    let parsedItems: Array<{ name: string; link?: string | null; price?: string | number | null; note?: string | null }> = [];
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (Array.isArray(parsed)) {
+        parsedItems = parsed;
+      }
+    } catch (parseErr) {
+      console.warn('Failed to parse model text as JSON directly:', parseErr);
+    }
+
+    let suppliers: Array<{ name: string; link: string | null; price: string | number | null; note: string | null }> = [];
+
+    if (parsedItems.length > 0) {
+      suppliers = parsedItems.map((item, idx) => {
+        let link = item.link && typeof item.link === 'string' && (item.link.startsWith('http://') || item.link.startsWith('https://'))
+          ? item.link
+          : (sourceLinks[idx] || sourceLinks[0] || null);
+
+        return {
+          name: item.name || `Supplier ${idx + 1}`,
+          link,
+          price: item.price !== undefined && item.price !== 'null' && item.price !== null ? item.price : null,
+          note: item.note || null,
+        };
+      });
+    } else if (sourceLinks.length > 0) {
+      suppliers = sourceLinks.map((uri, idx) => {
+        let name = `Supplier ${idx + 1}`;
+        try {
+          name = new URL(uri).hostname.replace(/^www\./, '');
+        } catch {
+          // ignore
+        }
+        return {
+          name,
+          link: uri,
+          price: null,
+          note: null,
+        };
+      });
+    }
+
+    return res.json({
+      suppliers,
+      sourceLinks,
+    });
+  } catch (error: any) {
+    console.error('API /api/suppliers error:', error);
+    return res.status(503).json({
+      error: 'Service Unavailable',
+      message: error?.message || 'Failed to search suppliers',
+    });
+  }
+});
+
+/**
  * SENPAI VOICE & CHAT ENDPOINT
  * Receives audioBase64 from MediaRecorder, calls Gemini with SENPAI system prompt and 4 tools
  */

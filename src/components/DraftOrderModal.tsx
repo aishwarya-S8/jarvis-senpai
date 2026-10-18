@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ShoppingCart, AlertCircle, Building2, Calculator, Info } from 'lucide-react';
 import { MaterialItem } from '../services/materialService';
-import { getSuppliers, Supplier } from '../services/supplierService';
+import { getSuppliers, getSampleSuppliers, Supplier } from '../services/supplierService';
 import { PurchaseOrder, draftOrder, saveOrderToFirestore } from '../services/orderService';
 import { themeClasses } from './darkTheme';
 
@@ -24,7 +24,7 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
 }) => {
   const th = (classes: string) => themeClasses(classes, isDark);
 
-  const [suppliers] = useState<Supplier[]>(getSuppliers());
+  const [suppliers, setSuppliers] = useState<Supplier[]>(getSampleSuppliers());
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [unitPrice, setUnitPrice] = useState<string>('');
@@ -72,6 +72,20 @@ export const DraftOrderModal: React.FC<DraftOrderModalProps> = ({
     );
     setErrorMsg(null);
   }, [material, orderType, suppliers]);
+
+  useEffect(() => {
+    if (!material) return;
+    getSuppliers({
+      materialName: material.name ?? undefined,
+      category: material.category ?? undefined,
+    })
+      .then((res) => {
+        if (res && res.length > 0) {
+          setSuppliers(res);
+        }
+      })
+      .catch(() => {});
+  }, [material?.name, material?.category]);
 
   if (!isOpen || !material) return null;
 

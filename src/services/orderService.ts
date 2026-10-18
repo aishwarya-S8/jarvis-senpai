@@ -107,17 +107,17 @@ export async function draftOrder(
   }
 
   // 1. Resolve Supplier
-  const allSuppliers = getSuppliers();
+  const allSuppliers = await getSuppliers({ materialName: material.name ?? undefined, category: material.category ?? undefined });
   let resolvedSupplier: Supplier | undefined;
 
   if (options?.customSupplierId) {
-    resolvedSupplier = getSupplierById(options.customSupplierId);
+    resolvedSupplier = getSupplierById(options.customSupplierId, allSuppliers);
   } else if (material.supplierId) {
-    resolvedSupplier = getSupplierById(material.supplierId);
+    resolvedSupplier = getSupplierById(material.supplierId, allSuppliers);
   }
 
   if (!resolvedSupplier) {
-    resolvedSupplier = getSuggestedSupplierForCategory(material.category ?? undefined);
+    resolvedSupplier = getSuggestedSupplierForCategory(material.category ?? undefined, allSuppliers);
   }
 
   // 2. Determine Suggested Quantity & Deficit Explanation

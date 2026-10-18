@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ShoppingCart,
   CheckCircle2,
@@ -27,7 +27,7 @@ import {
   ReceiveItemsResult,
 } from '../services/orderService';
 import { MaterialItem } from '../services/materialService';
-import { getSuppliers } from '../services/supplierService';
+import { getSuppliers, getSampleSuppliers, Supplier } from '../services/supplierService';
 import { ReceiveItemsModal } from './ReceiveItemsModal';
 import { themeClasses } from './darkTheme';
 
@@ -68,8 +68,13 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   const [editNotes, setEditNotes] = useState<string>('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState<boolean>(false);
   const [selectMaterialModalOpen, setSelectMaterialModalOpen] = useState<boolean>(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(getSampleSuppliers());
 
-  const suppliers = getSuppliers();
+  useEffect(() => {
+    getSuppliers().then((res) => {
+      if (res && res.length > 0) setSuppliers(res);
+    }).catch(() => {});
+  }, []);
 
   // Filter orders
   const filteredOrders = useMemo(() => {
