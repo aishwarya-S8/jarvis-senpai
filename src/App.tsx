@@ -158,8 +158,8 @@ interface CapturedPhotoData {
 export default function App() {
   const { currentLang, setLanguage, t } = useLanguage();
 
-  // Theme state: defaults to dark (looks more premium)
-  const [theme, setTheme] = useState<ThemeMode>('dark');
+  // Theme state: defaults to light
+  const [theme, setTheme] = useState<ThemeMode>('light');
 
   // Navigation tabs: 'scan', 'inventory', 'alerts', 'orders', or 'senpai'
   const [activeTab, setActiveTab] = useState<ActiveTab>('scan');
@@ -553,7 +553,7 @@ export default function App() {
 
       {/* Main Mobile-First Shell (440px max width) */}
       <div
-        className={`w-full max-w-[440px] min-h-screen sm:my-4 sm:min-h-[844px] sm:max-h-[920px] sm:rounded-[28px] flex flex-col relative z-10 overflow-hidden transition-all duration-300 shadow-[0_24px_60px_rgba(0,0,0,0.5)] border ${
+        className={`w-full max-w-[440px] h-[100dvh] sm:my-4 sm:h-[844px] sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px] flex flex-col relative z-10 overflow-hidden transition-all duration-300 shadow-[0_24px_60px_rgba(0,0,0,0.5)] border ${
           isDark
             ? 'bg-[#10131b]/80 border-white/10 backdrop-blur-2xl'
             : 'bg-white/85 border-slate-200/90 backdrop-blur-2xl'
@@ -1691,7 +1691,7 @@ export default function App() {
         {/* GLOBAL BOTTOM NAVIGATION (Frosted Glass)                      */}
         {/* ============================================================= */}
         <nav
-          className={`h-16 border-t flex items-center justify-around px-1 z-20 flex-shrink-0 transition-colors ${
+          className={`sticky bottom-0 h-16 box-content pb-[env(safe-area-inset-bottom)] border-t flex items-center justify-around px-1 z-20 flex-shrink-0 transition-colors ${
             isDark ? 'bg-[#10131b]/95 border-white/10' : 'bg-white/95 border-slate-200'
           }`}
         >

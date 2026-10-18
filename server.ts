@@ -45,10 +45,25 @@ You are equipped with voice processing and four operational tools:
 
 Language Support & Script Rules:
 - You natively understand and speak English, Hindi (हिंदी), and Kannada (ಕನ್ನಡ).
-- When the user query or language is in Kannada (ಕನ್ನಡ), reply in polite, fluent Kannada script so browser SpeechSynthesis (kn-IN) reads it naturally.
-- When the user query is in Hindi, reply in fluent Hindi Devanagari script for (hi-IN) TTS.
-- Otherwise provide a sharp, supportive, and natural answer in English.
+- Always reply in the selected app language given at the end of these instructions, whatever language the user speaks or types in.
+- Kannada replies use polite, fluent Kannada script so browser SpeechSynthesis (kn-IN) reads them naturally; Hindi replies use Devanagari script for (hi-IN) TTS.
 - Always invoke the corresponding tool function (scanItem, predictAlerts, findSuppliers, draftOrder) if appropriate to fulfill their intent.`;
+
+const SENPAI_LANGUAGE_NAMES: Record<string, string> = {
+  EN: 'English',
+  HI: 'Hindi, written in Devanagari script',
+  KN: 'Kannada, written in Kannada script',
+};
+
+/**
+ * Hard rule appended to the Senpai system prompt so every reply uses the app's selected language.
+ */
+export function senpaiLanguageRule(language?: string): string {
+  const name = SENPAI_LANGUAGE_NAMES[language || 'EN'] || SENPAI_LANGUAGE_NAMES.EN;
+  return `\n\nSelected app language: ${name}.
+- You MUST write your entire reply ONLY in ${name}, regardless of the language the user speaks or types in.
+- Do not mix in sentences from any other language. Product names, batch numbers, supplier names and units may stay as written.`;
+}
 
 export const senpaiFunctionDeclarations: any[] = [
   {
@@ -325,52 +340,33 @@ app.post('/api/extract', async (req, res) => {
  */
 app.post('/api/senpai/voice-chat', async (req, res) => {
   try {
-    const { audioBase64, mimeType = 'audio/webm', textPrompt } = req.body;
+    const { audioBase64, mimeType = 'audio/webm', textPrompt, language = 'EN' } = req.body;
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       const query = (textPrompt || 'voice query').toLowerCase();
-      const isKannada = /[\u0C80-\u0CFF]/.test(textPrompt || '') || query.includes('kannada');
-      const isHindi = /[\u0900-\u097F]/.test(textPrompt || '') || query.includes('hindi');
-
-      let senpaiAnswer = isKannada
-        ? "ನಮಸ್ಕಾರ! ನಾನು ಸೆನ್‌ಪೈ. ದಾಸ್ತಾನು ತಪಾಸಣೆ, ಅವಧಿ ಎಚ್ಚರಿಕೆಗಳು ಮತ್ತು ಪೂರೈಕೆದಾರರ ಹುಡುಕಾಟಕ್ಕೆ ನಾನು ಸಿದ್ಧನಿದ್ದೇನೆ."
-        : isHindi
-        ? "नमस्ते! मैं सेनपाई हूँ। इन्वेंटरी जांच, समाप्ति अलर्ट और आपूर्तिकर्ता खोजने के लिए मैं तैयार हूँ।"
-        : "Konnichiwa! Senpai is online. I'm ready to inspect materials, predict expiration alerts, find reliable suppliers, or draft purchase orders.";
+      // Demo mode: route by keyword (EN / HI / KN). Reply text is left empty so the client
+      // narrates the tool call from its i18n dictionary in the selected language.
+      const senpaiAnswer = '';
       const functionCalls: any[] = [];
+      const hasAny = (words: string[]) => words.some((w) => query.includes(w));
 
-      if (query.includes('scan') || query.includes('camera') || query.includes('label') || query.includes('ಸ್ಕ್ಯಾನ್') || query.includes('ತಪಾಸಣೆ')) {
+      if (hasAny(['scan', 'camera', 'label', 'ಸ್ಕ್ಯಾನ್', 'ತಪಾಸಣೆ', 'स्कैन', 'कैमरा', 'लेबल'])) {
         functionCalls.push({
           name: 'scanItem',
           args: { itemName: 'Organic Fairtrade Coffee', category: 'Groceries' },
         });
-        senpaiAnswer = isKannada
-          ? "ಸ್ಕ್ಯಾನರ್ ಸಕ್ರಿಯಗೊಳಿಸಲಾಗಿದೆ. ನಿಮ್ಮ ಕ್ಯಾಮೆರಾವನ್ನು ಲೇಬಲ್‌ನತ್ತ ತೋರಿಸಿ!"
-          : isHindi
-          ? "स्कैनर तैयार है। अपने कैमरे को सामग्री लेबल की ओर रखें!"
-          : "I've triggered the scanner for you. Point your camera at the material label or batch tag!";
-      } else if (query.includes('alert') || query.includes('expire') || query.includes('warning') || query.includes('check') || query.includes('ಎಚ್ಚರಿಕೆ') || query.includes('ಅವಧಿ')) {
+      } else if (hasAny(['alert', 'expire', 'warning', 'check', 'ಎಚ್ಚರಿಕೆ', 'ಅವಧಿ', 'अलर्ट', 'समाप्ति', 'चेतावनी', 'जाँच', 'जांच'])) {
         functionCalls.push({
           name: 'predictAlerts',
           args: { filterDays: 30, urgency: 'warning' },
         });
-        senpaiAnswer = isKannada
-          ? "ನಿಮ್ಮ ದಾಸ್ತಾನು ಪರಿಶೀಲಿಸಲಾಗಿದೆ. ಮುಂಬರುವ 30 ದಿನಗಳಲ್ಲಿ ಮುಕ್ತಾಯಗೊಳ್ಳುವ ವಸ್ತುಗಳ ಪಟ್ಟಿ ಇಲ್ಲಿದೆ!"
-          : isHindi
-          ? "मैंने आपकी इन्वेंटरी का विश्लेषण किया है। 30 दिनों में समाप्त होने वाली सामग्री यहाँ है!"
-          : "I analyzed your inventory stock. Here are the materials approaching expiration within 30 days!";
-      } else if (query.includes('supplier') || query.includes('vendor') || query.includes('quote') || query.includes('source') || query.includes('ಪೂರೈಕೆದಾರ') || query.includes('ಬೆಲೆ')) {
+      } else if (hasAny(['supplier', 'vendor', 'quote', 'source', 'ಪೂರೈಕೆದಾರ', 'ಬೆಲೆ', 'आपूर्तिकर्ता', 'सप्लायर', 'विक्रेता'])) {
         functionCalls.push({
           name: 'findSuppliers',
           args: { materialName: 'Organic Fairtrade Coffee Beans', quantityNeeded: 50, region: 'Asia-Pacific' },
         });
-        senpaiAnswer = isKannada
-          ? "ಪರಿಶೀಲಿಸಿದ 3 ವಿಶ್ವಾಸಾರ್ಹ ಪೂರೈಕೆದಾರರ ವಿವರಗಳು ಮತ್ತು ಬೆಲೆ ಪಟ್ಟಿ ಲಭ್ಯವಿದೆ."
-          : isHindi
-          ? "सत्यापित डिलीवरी समय और प्रतिस्पर्धी मूल्य वाले 3 आपूर्तिकर्ता मिले।"
-          : "Found 3 verified suppliers with verified lead times and competitive volume pricing.";
-      } else if (query.includes('order') || query.includes('purchase') || query.includes('draft') || query.includes('buy') || query.includes('ಆದೇಶ') || query.includes('ಖರೀದಿ')) {
+      } else if (hasAny(['order', 'purchase', 'draft', 'buy', 'ಆದೇಶ', 'ಖರೀದಿ', 'आदेश', 'ऑर्डर', 'खरीद'])) {
         functionCalls.push({
           name: 'draftOrder',
           args: {
@@ -379,11 +375,6 @@ app.post('/api/senpai/voice-chat', async (req, res) => {
             urgency: 'Expedited',
           },
         });
-        senpaiAnswer = isKannada
-          ? "ಮರುಪೂರಣ ಖರೀದಿ ಆದೇಶವನ್ನು ಸಿದ್ಧಪಡಿಸಲಾಗಿದೆ. ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ!"
-          : isHindi
-          ? "मैंने आपकी समीक्षा के लिए पुनःपूर्ति खरीद आदेश तैयार किया है।"
-          : "I've drafted a replenishment purchase order for your review. Check the details below!";
       }
 
       return res.json({
@@ -438,7 +429,7 @@ app.post('/api/senpai/voice-chat', async (req, res) => {
       });
 
       parts.push({
-        text: 'Listen to the user audio. First, output <user_transcript>The exact words spoken by the user</user_transcript>. Second, answer as Senpai, and invoke the appropriate tool (scanItem, predictAlerts, findSuppliers, draftOrder) if appropriate to fulfill their intent.',
+        text: `Listen to the user audio. First, output <user_transcript>The exact words spoken by the user</user_transcript>. Second, answer as Senpai in ${SENPAI_LANGUAGE_NAMES[language] || SENPAI_LANGUAGE_NAMES.EN} only, and invoke the appropriate tool (scanItem, predictAlerts, findSuppliers, draftOrder) if appropriate to fulfill their intent.`,
       });
     } else if (textPrompt) {
       parts.push({
@@ -452,7 +443,7 @@ app.post('/api/senpai/voice-chat', async (req, res) => {
       model: 'gemini-3.8-flash',
       contents: { parts },
       config: {
-        systemInstruction: SENPAI_SYSTEM_PROMPT,
+        systemInstruction: SENPAI_SYSTEM_PROMPT + senpaiLanguageRule(language),
         tools: [{ functionDeclarations: senpaiFunctionDeclarations }],
       },
     });
@@ -462,27 +453,14 @@ app.post('/api/senpai/voice-chat', async (req, res) => {
     const userTranscript = transcriptMatch
       ? transcriptMatch[1].trim()
       : textPrompt || 'Audio message received';
-    let senpaiAnswer = rawText.replace(/<user_transcript>[\s\S]*?<\/user_transcript>/gi, '').trim();
+    const senpaiAnswer = rawText.replace(/<user_transcript>[\s\S]*?<\/user_transcript>/gi, '').trim();
 
     const functionCalls = response.functionCalls || [];
 
-    // Provide friendly response if function call was made without inline text
-    if (!senpaiAnswer && functionCalls.length > 0) {
-      const call = functionCalls[0];
-      if (call.name === 'scanItem') {
-        senpaiAnswer = `Opening scanner to inspect ${(call.args as any)?.itemName || 'item'}. Hold steady!`;
-      } else if (call.name === 'predictAlerts') {
-        senpaiAnswer = `Analyzing inventory health for items expiring within ${(call.args as any)?.filterDays || 30} days.`;
-      } else if (call.name === 'findSuppliers') {
-        senpaiAnswer = `Looking up verified suppliers for ${(call.args as any)?.materialName || 'requested material'}.`;
-      } else if (call.name === 'draftOrder') {
-        senpaiAnswer = `Drafting purchase order for ${(call.args as any)?.supplierName || 'vendor'}.`;
-      }
-    }
-
+    // An empty answer with tool calls is narrated client-side in the selected language
     return res.json({
       userTranscript,
-      senpaiAnswer: senpaiAnswer || "Senpai here! How can I assist your inventory today?",
+      senpaiAnswer,
       functionCalls,
     });
   } catch (error: any) {

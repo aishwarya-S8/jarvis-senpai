@@ -47,11 +47,12 @@ export function speakText(
     utterance.rate = 1.0;
     utterance.pitch = 1.05; // Friendly AI pitch
 
-    // Find best voice match
+    // Find best voice match: exact locale first (e.g. kn-IN), then same language (e.g. kn-*)
     const voices = window.speechSynthesis.getVoices();
-    const matchingVoice = voices.find(
-      (v) => v.lang.toLowerCase() === targetLocale.toLowerCase() || v.lang.startsWith(targetLocale.split('-')[0])
-    );
+    const langPrefix = targetLocale.split('-')[0];
+    const matchingVoice =
+      voices.find((v) => v.lang.replace('_', '-').toLowerCase() === targetLocale.toLowerCase()) ||
+      voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
     if (matchingVoice) {
       utterance.voice = matchingVoice;
     }

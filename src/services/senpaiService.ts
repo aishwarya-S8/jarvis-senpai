@@ -1,3 +1,5 @@
+import { AppLanguage } from './speechService';
+
 export interface SenpaiFunctionCall {
   name: 'scanItem' | 'predictAlerts' | 'findSuppliers' | 'draftOrder' | string;
   args: Record<string, any>;
@@ -80,11 +82,13 @@ export function blobToBase64(blob: Blob): Promise<string> {
 /**
  * Sends audio base64 or text prompt to the Senpai voice & Gemini generateContent endpoint.
  * Ensures data-URI prefix is stripped and mimeType is Gemini-compatible.
+ * `language` is the app's selected language; Senpai replies only in that language.
  */
 export async function sendVoiceToSenpai(
   audioBase64?: string,
   mimeType: string = 'audio/ogg',
-  textPrompt?: string
+  textPrompt?: string,
+  language: AppLanguage = 'EN'
 ): Promise<SenpaiVoiceResponse> {
   try {
     const rawBase64 = audioBase64 ? stripDataUri(audioBase64) : undefined;
@@ -99,6 +103,7 @@ export async function sendVoiceToSenpai(
         audioBase64: rawBase64,
         mimeType: cleanMime,
         textPrompt,
+        language,
       }),
     });
 

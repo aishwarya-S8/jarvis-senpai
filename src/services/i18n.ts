@@ -173,6 +173,35 @@ export interface Translations {
   toastDeleted: string;
   toastTargeting: string;
   languageSwitched: string;
+
+  // Senpai Copilot narration & messages ({placeholders} filled via formatT)
+  senpaiGreeting: string;
+  senpaiDefaultAnswer: string;
+  senpaiAnswerScan: string;
+  senpaiAnswerAlerts: string;
+  senpaiAnswerSuppliers: string;
+  senpaiAnswerDraft: string;
+  senpaiErrorReply: string;
+  senpaiErrorFallback: string;
+  senpaiCommError: string;
+  speechErrNotSupported: string;
+  speechErrNoSpeech: string;
+  speechErrNotAllowed: string;
+  speechErrNetwork: string;
+  speechErrAborted: string;
+  speechErrAudioCapture: string;
+  speechErrGeneric: string;
+  speechErrCouldNotStart: string;
+  readyToInspect: string;
+  vendorLabel: string;
+  languageLabel: string;
+  speechTranscribedLocally: string;
+  speakAgain: string;
+  senpaiFooter: string;
+  urgencyStandard: string;
+  urgencyExpedited: string;
+  urgencyOvernight: string;
+  draftOrderPrompt: string;
 }
 
 export const TRANSLATIONS: Record<AppLanguage, Translations> = {
@@ -354,6 +383,33 @@ export const TRANSLATIONS: Record<AppLanguage, Translations> = {
     toastDeleted: 'Material removed from inventory.',
     toastTargeting: 'Targeting material:',
     languageSwitched: 'Language switched to English',
+    senpaiGreeting: 'Konnichiwa! I am Senpai, your AI inventory assistant in Jarvis Senpai 2026. Speak naturally—I\'ll transcribe your words locally and use Gemini to predict alerts, inspect materials, discover suppliers, or draft purchase orders.',
+    senpaiDefaultAnswer: 'Senpai here! How can I assist your inventory today?',
+    senpaiAnswerScan: 'Opening the scanner to inspect {item}. Point your camera at the material label or batch tag!',
+    senpaiAnswerAlerts: 'Analyzing inventory health for items expiring within {days} days.',
+    senpaiAnswerSuppliers: 'Looking up suppliers for {material}.',
+    senpaiAnswerDraft: 'Drafting a purchase order for {supplier}. Please review the details below.',
+    senpaiErrorReply: 'Gomen ne! I encountered an error: {message}',
+    senpaiErrorFallback: 'Please check your connection and try again.',
+    senpaiCommError: 'Failed to communicate with Senpai',
+    speechErrNotSupported: 'Browser SpeechRecognition is not supported on this browser. Please type your query in the text box below or click a quick prompt.',
+    speechErrNoSpeech: 'No speech detected. Please speak closer to your microphone or type your query below.',
+    speechErrNotAllowed: 'Microphone permission was denied. Please allow microphone access in your browser or type your query below.',
+    speechErrNetwork: 'Network error communicating with speech recognition service. Please check your connection or type below.',
+    speechErrAborted: 'Speech recognition was aborted. Tap the microphone to try again or type below.',
+    speechErrAudioCapture: 'Audio capture failed. Ensure your microphone is working and not used by another application.',
+    speechErrGeneric: 'Speech recognition error: {error}. You can type your query below.',
+    speechErrCouldNotStart: 'Could not start speech recognition: {error}. Please type below.',
+    readyToInspect: 'Ready to inspect barcode and batch certificate for',
+    vendorLabel: 'Vendor:',
+    languageLabel: 'Language:',
+    speechTranscribedLocally: 'Speech Transcribed Locally',
+    speakAgain: 'Speak again',
+    senpaiFooter: 'Local browser speech-to-text • Gemini tool reasoning • TTS spoken back in English (en-US)',
+    urgencyStandard: 'Standard',
+    urgencyExpedited: 'Expedited',
+    urgencyOvernight: 'Overnight',
+    draftOrderPrompt: 'Draft order for {quantity} units of {material} from {supplier}',
   },
 
   HI: {
@@ -534,6 +590,33 @@ export const TRANSLATIONS: Record<AppLanguage, Translations> = {
     toastDeleted: 'सामग्री इन्वेंटरी से हटा दी गई।',
     toastTargeting: 'लक्षित सामग्री:',
     languageSwitched: 'भाषा बदलकर हिंदी की गई',
+    senpaiGreeting: 'नमस्ते! मैं सेनपाई हूँ, जार्विस सेनपाई 2026 में आपका AI इन्वेंटरी सहायक। स्वाभाविक रूप से बोलें—मैं आपके शब्दों को स्थानीय रूप से लिखूँगा और जेमिनी की मदद से अलर्ट का अनुमान, सामग्री की जाँच, आपूर्तिकर्ताओं की खोज या खरीद आदेश तैयार करूँगा।',
+    senpaiDefaultAnswer: 'सेनपाई यहाँ है! आज मैं आपकी इन्वेंटरी में कैसे मदद कर सकता हूँ?',
+    senpaiAnswerScan: '{item} की जाँच के लिए स्कैनर खोल रहा हूँ। अपने कैमरे को सामग्री लेबल या बैच टैग की ओर रखें!',
+    senpaiAnswerAlerts: '{days} दिनों में समाप्त होने वाली वस्तुओं के लिए इन्वेंटरी की स्थिति का विश्लेषण कर रहा हूँ।',
+    senpaiAnswerSuppliers: '{material} के लिए आपूर्तिकर्ता खोज रहा हूँ।',
+    senpaiAnswerDraft: '{supplier} के लिए खरीद आदेश तैयार कर रहा हूँ। कृपया नीचे विवरण की समीक्षा करें।',
+    senpaiErrorReply: 'माफ़ कीजिए! एक त्रुटि हुई: {message}',
+    senpaiErrorFallback: 'कृपया अपना कनेक्शन जाँचें और फिर से प्रयास करें।',
+    senpaiCommError: 'सेनपाई से संपर्क नहीं हो सका',
+    speechErrNotSupported: 'इस ब्राउज़र में वाक् पहचान समर्थित नहीं है। कृपया नीचे टेक्स्ट बॉक्स में अपना प्रश्न लिखें या कोई त्वरित प्रश्न चुनें।',
+    speechErrNoSpeech: 'कोई आवाज़ नहीं मिली। कृपया माइक्रोफ़ोन के पास बोलें या नीचे अपना प्रश्न लिखें।',
+    speechErrNotAllowed: 'माइक्रोफ़ोन की अनुमति नहीं दी गई। कृपया ब्राउज़र में माइक्रोफ़ोन की अनुमति दें या नीचे अपना प्रश्न लिखें।',
+    speechErrNetwork: 'वाक् पहचान सेवा से संपर्क में नेटवर्क त्रुटि। कृपया कनेक्शन जाँचें या नीचे लिखें।',
+    speechErrAborted: 'वाक् पहचान रोक दी गई। फिर से प्रयास करने के लिए माइक दबाएँ या नीचे लिखें।',
+    speechErrAudioCapture: 'ऑडियो रिकॉर्ड नहीं हो सका। सुनिश्चित करें कि माइक्रोफ़ोन काम कर रहा है और किसी अन्य ऐप में उपयोग नहीं हो रहा।',
+    speechErrGeneric: 'वाक् पहचान त्रुटि: {error}। आप नीचे अपना प्रश्न लिख सकते हैं।',
+    speechErrCouldNotStart: 'वाक् पहचान शुरू नहीं हो सकी: {error}। कृपया नीचे लिखें।',
+    readyToInspect: 'बारकोड और बैच प्रमाणपत्र की जाँच के लिए तैयार:',
+    vendorLabel: 'विक्रेता:',
+    languageLabel: 'भाषा:',
+    speechTranscribedLocally: 'आवाज़ स्थानीय रूप से लिखी गई',
+    speakAgain: 'फिर से सुनें',
+    senpaiFooter: 'स्थानीय वाक् पहचान • जेमिनी टूल्स • हिंदी आवाज़ (hi-IN)',
+    urgencyStandard: 'सामान्य',
+    urgencyExpedited: 'त्वरित',
+    urgencyOvernight: 'रातोंरात',
+    draftOrderPrompt: '{supplier} से {material} की {quantity} इकाइयों का खरीद आदेश तैयार करें',
   },
 
   KN: {
@@ -714,8 +797,42 @@ export const TRANSLATIONS: Record<AppLanguage, Translations> = {
     toastDeleted: 'ಸಾಮಗ್ರಿಯನ್ನು ದಾಸ್ತಾನಿನಿಂದ ತೆಗೆದುಹಾಕಲಾಗಿದೆ.',
     toastTargeting: 'ಗುರಿಪಡಿಸಿದ ಸಾಮಗ್ರಿ:',
     languageSwitched: 'ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ',
+    senpaiGreeting: 'ನಮಸ್ಕಾರ! ನಾನು ಸೆನ್‌ಪೈ, ಜಾರ್ವಿಸ್ ಸೆನ್‌ಪೈ 2026 ರಲ್ಲಿ ನಿಮ್ಮ AI ದಾಸ್ತಾನು ಸಹಾಯಕ. ಸಹಜವಾಗಿ ಮಾತನಾಡಿ—ನಿಮ್ಮ ಮಾತುಗಳನ್ನು ಸ್ಥಳೀಯವಾಗಿ ಬರೆದು, ಜೆಮಿನಿ ಮೂಲಕ ಎಚ್ಚರಿಕೆಗಳನ್ನು ಊಹಿಸುತ್ತೇನೆ, ವಸ್ತುಗಳನ್ನು ಪರಿಶೀಲಿಸುತ್ತೇನೆ, ಪೂರೈಕೆದಾರರನ್ನು ಹುಡುಕುತ್ತೇನೆ ಅಥವಾ ಖರೀದಿ ಆದೇಶಗಳನ್ನು ಸಿದ್ಧಪಡಿಸುತ್ತೇನೆ.',
+    senpaiDefaultAnswer: 'ಸೆನ್‌ಪೈ ಇಲ್ಲಿದ್ದೇನೆ! ಇಂದು ನಿಮ್ಮ ದಾಸ್ತಾನಿಗೆ ನಾನು ಹೇಗೆ ಸಹಾಯ ಮಾಡಲಿ?',
+    senpaiAnswerScan: '{item} ಪರಿಶೀಲಿಸಲು ಸ್ಕ್ಯಾನರ್ ತೆರೆಯುತ್ತಿದ್ದೇನೆ. ನಿಮ್ಮ ಕ್ಯಾಮೆರಾವನ್ನು ವಸ್ತುವಿನ ಲೇಬಲ್ ಅಥವಾ ಬ್ಯಾಚ್ ಟ್ಯಾಗ್‌ನತ್ತ ತೋರಿಸಿ!',
+    senpaiAnswerAlerts: '{days} ದಿನಗಳಲ್ಲಿ ಮುಕ್ತಾಯಗೊಳ್ಳುವ ವಸ್ತುಗಳಿಗಾಗಿ ದಾಸ್ತಾನಿನ ಸ್ಥಿತಿಯನ್ನು ವಿಶ್ಲೇಷಿಸುತ್ತಿದ್ದೇನೆ.',
+    senpaiAnswerSuppliers: '{material} ಗಾಗಿ ಪೂರೈಕೆದಾರರನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇನೆ.',
+    senpaiAnswerDraft: '{supplier} ಗಾಗಿ ಖರೀದಿ ಆದೇಶವನ್ನು ಸಿದ್ಧಪಡಿಸುತ್ತಿದ್ದೇನೆ. ದಯವಿಟ್ಟು ಕೆಳಗಿನ ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ.',
+    senpaiErrorReply: 'ಕ್ಷಮಿಸಿ! ಒಂದು ದೋಷ ಎದುರಾಯಿತು: {message}',
+    senpaiErrorFallback: 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    senpaiCommError: 'ಸೆನ್‌ಪೈ ಜೊತೆ ಸಂಪರ್ಕ ಸಾಧ್ಯವಾಗಲಿಲ್ಲ',
+    speechErrNotSupported: 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಬೆಂಬಲಿತವಾಗಿಲ್ಲ. ದಯವಿಟ್ಟು ಕೆಳಗಿನ ಪಠ್ಯ ಪೆಟ್ಟಿಗೆಯಲ್ಲಿ ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಟೈಪ್ ಮಾಡಿ ಅಥವಾ ತ್ವರಿತ ಪ್ರಶ್ನೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ.',
+    speechErrNoSpeech: 'ಯಾವುದೇ ಧ್ವನಿ ಪತ್ತೆಯಾಗಿಲ್ಲ. ದಯವಿಟ್ಟು ಮೈಕ್ರೊಫೋನ್ ಹತ್ತಿರ ಮಾತನಾಡಿ ಅಥವಾ ಕೆಳಗೆ ಟೈಪ್ ಮಾಡಿ.',
+    speechErrNotAllowed: 'ಮೈಕ್ರೊಫೋನ್ ಅನುಮತಿ ನಿರಾಕರಿಸಲಾಗಿದೆ. ದಯವಿಟ್ಟು ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಮೈಕ್ರೊಫೋನ್ ಅನುಮತಿಸಿ ಅಥವಾ ಕೆಳಗೆ ಟೈಪ್ ಮಾಡಿ.',
+    speechErrNetwork: 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಸೇವೆಯೊಂದಿಗೆ ನೆಟ್‌ವರ್ಕ್ ದೋಷ. ದಯವಿಟ್ಟು ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಅಥವಾ ಕೆಳಗೆ ಟೈಪ್ ಮಾಡಿ.',
+    speechErrAborted: 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ನಿಲ್ಲಿಸಲಾಗಿದೆ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಮೈಕ್ ಒತ್ತಿ ಅಥವಾ ಕೆಳಗೆ ಟೈಪ್ ಮಾಡಿ.',
+    speechErrAudioCapture: 'ಆಡಿಯೋ ಸೆರೆಹಿಡಿಯಲು ವಿಫಲವಾಗಿದೆ. ಮೈಕ್ರೊಫೋನ್ ಕೆಲಸ ಮಾಡುತ್ತಿದೆಯೇ ಮತ್ತು ಬೇರೆ ಅಪ್ಲಿಕೇಶನ್ ಬಳಸುತ್ತಿಲ್ಲವೇ ಎಂದು ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಿ.',
+    speechErrGeneric: 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ದೋಷ: {error}. ನೀವು ಕೆಳಗೆ ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಟೈಪ್ ಮಾಡಬಹುದು.',
+    speechErrCouldNotStart: 'ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ ಪ್ರಾರಂಭಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ: {error}. ದಯವಿಟ್ಟು ಕೆಳಗೆ ಟೈಪ್ ಮಾಡಿ.',
+    readyToInspect: 'ಬಾರ್‌ಕೋಡ್ ಮತ್ತು ಬ್ಯಾಚ್ ಪ್ರಮಾಣಪತ್ರ ಪರಿಶೀಲನೆಗೆ ಸಿದ್ಧ:',
+    vendorLabel: 'ಮಾರಾಟಗಾರ:',
+    languageLabel: 'ಭಾಷೆ:',
+    speechTranscribedLocally: 'ಧ್ವನಿಯನ್ನು ಸ್ಥಳೀಯವಾಗಿ ಬರೆಯಲಾಗಿದೆ',
+    speakAgain: 'ಮತ್ತೆ ಕೇಳಿ',
+    senpaiFooter: 'ಸ್ಥಳೀಯ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆ • ಜೆಮಿನಿ ಪರಿಕರಗಳು • ಕನ್ನಡ ಧ್ವನಿ (kn-IN)',
+    urgencyStandard: 'ಸಾಮಾನ್ಯ',
+    urgencyExpedited: 'ತ್ವರಿತ',
+    urgencyOvernight: 'ರಾತ್ರೋರಾತ್ರಿ',
+    draftOrderPrompt: '{supplier} ಇಂದ {material} ನ {quantity} ಘಟಕಗಳಿಗೆ ಖರೀದಿ ಆದೇಶ ಸಿದ್ಧಪಡಿಸಿ',
   },
 };
+
+/**
+ * Fills {placeholder} tokens in a translated string.
+ */
+export function formatT(template: string, params: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key) => (key in params ? String(params[key]) : match));
+}
 
 export function getTranslations(lang: AppLanguage): Translations {
   return TRANSLATIONS[lang] || TRANSLATIONS.EN;
