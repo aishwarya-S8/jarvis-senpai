@@ -1634,6 +1634,7 @@ export default function App() {
         {/* ============================================================= */}
         {activeTab === 'alerts' && (
           <AlertsScreen
+            isDark={isDark}
             alerts={alerts}
             materials={materials}
             isLoading={isLoadingAlerts}
@@ -1652,6 +1653,7 @@ export default function App() {
         {/* ============================================================= */}
         {activeTab === 'orders' && (
           <OrdersScreen
+            isDark={isDark}
             orders={orders}
             materials={materials}
             isLoading={isLoadingOrders}
@@ -1817,6 +1819,7 @@ export default function App() {
         {/* MODALS: REORDER DRAFT & MATERIAL STOCK SETTINGS               */}
         {/* ============================================================= */}
         <DraftOrderModal
+          isDark={isDark}
           isOpen={!!selectedMaterialForDraft}
           onClose={() => setSelectedMaterialForDraft(null)}
           material={selectedMaterialForDraft}
@@ -1829,6 +1832,7 @@ export default function App() {
         />
 
         <MaterialSettingsModal
+          isDark={isDark}
           isOpen={!!selectedMaterialForSettings}
           onClose={() => setSelectedMaterialForSettings(null)}
           material={selectedMaterialForSettings}
